@@ -1,0 +1,28 @@
+[project]
+name = "llm-repo-agent"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Justin Barry",email = "justinbarrythejedi@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "openai (>=2.13.0,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "llm_repo_agent", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.2"
+
+[project.scripts]
+repo-agent = "llm_repo_agent.main:main"
