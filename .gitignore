@@ -212,3 +212,10 @@ __marimo__/
 tempjson.jsonl
 old_high_level_notes.md
 trace.jsonl
+
+.DS_Store
+ ignore this specific run trace
+runs/quixbugs_trace.jsonl
+# or ignore all traces
+runs/*.jsonl
+runs/*.jsonl.old

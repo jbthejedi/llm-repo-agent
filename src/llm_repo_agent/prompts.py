@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
-from typing import Dict, Any, List
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 
 TOOL_SPEC = [
@@ -20,11 +21,16 @@ def system_prompt() -> str:
     "OUTPUT CONTRACT (STRICT):\n"
     "- Output EXACTLY ONE JSON object. No extra text. No markdown.\n"
     "- Never output multiple JSON objects.\n"
+    "- If your response accidentally contains multiple JSON objects or trailing text, the agent will parse only the first JSON object and ignore the rest.\n"
     "- If more work is needed, choose the single best next tool_call and stop.\n\n"
 
     "ALLOWED ACTIONS:\n"
     'A) {"type":"tool_call","name":<tool_name>,"args":{...}}\n'
     'B) {"type":"final","summary":"...","changes":[{"path":"...","description":"..."}]}\n\n'
+
+    "EXAMPLES:\n"
+    'Example tool_call: {"type":"tool_call","name":"list_files","args":{"rel_dir":".","max_files":20}}\n'
+    'Example final: {"type":"final","summary":"Found test command: pytest","changes":[]}\n\n'
 
     "TOOL_CALL RULES:\n"
     "- type must be exactly 'tool_call'.\n"
@@ -54,3 +60,29 @@ def user_prompt(goal: str, state: Dict[str, Any]) -> str:
       f"GOAL:\n{goal}\n\n"
       f"STATE (compact):\n{json.dumps(state, indent=2)[:6000]}\n"
   )
+
+
+@dataclass(frozen=True)
+class Prompt:
+  def system(self) -> str:
+    return system_prompt()
+
+  def user(self, goal: str, state: Dict[str, Any], history: List[Dict[str, Any]]) -> str:
+    return user_prompt(goal, {"state": state, "history": history})
+
+  def compile_prompt(
+      self,
+      goal: str,
+      state: Dict[str, Any],
+      history: List[Dict[str, Any]],
+  ) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": self.system(),
+        },
+        {
+            "role": "user",
+            "content": self.user(goal, state, history),
+        },
+    ]

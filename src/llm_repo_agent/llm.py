@@ -1,12 +1,19 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict, Any, Protocol
-from openai import OpenAI
+try:
+  from openai import OpenAI
+except Exception:
+  OpenAI = None
 import json
+from types import SimpleNamespace
+
+from .actions import parse_action, ActionParseError, ToolCallAction, FinalAction
 
 
 class LLM(Protocol):
-  def next_action(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
+
+  def next_action(self, messages: List[Dict[str, str]]) -> Any:
     ...
 
 
@@ -78,36 +85,79 @@ class OpenAIResponsesLLM:
   max_output_tokens: int = 600
 
   def __post_init__(self) -> None:
-    self.client = OpenAI()
+    try:
+      self.client = OpenAI()
+    except Exception:
+      # Tests and some dev environments may not have OPENAI_API_KEY set. Provide a
+      # minimal dummy client that yields empty responses so tests can override it.
+      self.client = SimpleNamespace(responses=SimpleNamespace(create=lambda *a, **k: SimpleNamespace(output=[], output_text="")))
 
   def next_action(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
     resp = self.client.responses.create(
       model=self.model,
       input=messages,
       tools=TOOLS,
-      parallel_tool_calls=False,   # prefer one call at a time :contentReference[oaicite:3]{index=3}
-      max_tool_calls=1,            # hard cap :contentReference[oaicite:4]{index=4}
+      parallel_tool_calls=False,   # prefer one call at a time 
+      max_tool_calls=1,            # hard cap 
       temperature=self.temperature,
       max_output_tokens=self.max_output_tokens,
       # For the “final” case, force valid JSON object in text:
-      text={"format": {"type": "json_object"}},  # JSON mode :contentReference[oaicite:5]{index=5}
+      text={"format": {"type": "json_object"}},  # JSON mode
     )
 
-    # 1) If the model called a tool, it will appear as a function_call item. :contentReference[oaicite:6]{index=6}
+    # 1) If the model called a tool, it will appear as a function_call item.
     for item in getattr(resp, "output", []) or []:
       if getattr(item, "type", None) == "function_call":
         name = item.name
         args = item.arguments
         if isinstance(args, str):
           args = json.loads(args)
-        return {"type": "tool_call", "name": name, "args": args}
+        raw = {"type": "tool_call", "name": name, "args": args}
+        # record raw payload for tracing
+        self._last_raw = raw
+        try:
+          action = parse_action(raw)
+        except ActionParseError:
+          self._last_parse_error = True
+          raise
+        return action
 
     # 2) Otherwise, treat output_text as the FINAL json object.
     txt = (resp.output_text or "").strip()
     if not txt:
       raise RuntimeError("Empty model response (no tool call, no text).")
 
-    obj = json.loads(txt)
+    # Robustly parse only the first JSON object. If the model returns multiple
+    # JSON objects or trailing text, use the first object and warn but do not
+    # crash the agent.
+    decoder = json.JSONDecoder()
+    try:
+      obj, end = decoder.raw_decode(txt)
+    except json.JSONDecodeError:
+      snippet = txt[:500].replace("\n", "\\n")
+      raise RuntimeError(f"Could not parse model output as JSON. Leading text: {snippet!r}")
+
+    trailing = txt[end:].strip()
+    # Record trailing text on the LLM instance so the agent can trace/log it.
+    self._last_trailing = trailing if trailing else None
+    if trailing:
+      import warnings
+      warnings.warn(
+        "Model returned extra JSON objects or trailing text; using the first object and ignoring the rest.",
+        UserWarning,
+      )
+
     if not isinstance(obj, dict):
       raise ValueError("Final response must be a JSON object.")
-    return obj
+
+    # record raw object for tracing
+    self._last_raw = obj
+
+    # parse into typed Action; let ActionParseError bubble up so caller can handle/log
+    try:
+      action = parse_action(obj)
+    except ActionParseError:
+      self._last_parse_error = True
+      raise
+
+    return action

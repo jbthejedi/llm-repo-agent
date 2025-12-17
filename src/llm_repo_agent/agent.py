@@ -7,8 +7,12 @@ from pprint import pp
 
 from .llm import LLM
 from .tools import RepoTools
-from .prompts import system_prompt, user_prompt
+from .prompts import Prompt
 from .trace import Trace
+from .summary import RunSummary, summarize_history
+from .history import History
+from .controller import ActionController
+from .actions import ToolCallAction, FinalAction, ActionParseError
 
 
 @dataclass
@@ -18,173 +22,115 @@ class AgentConfig:
   loop_tripwire: int = 3
 
 
-import json
-from typing import Any, Dict, Tuple
-
-def parse_one_json_object(raw: str) -> tuple[Dict[str, Any], str]:
-  s = raw.lstrip()
-  obj, idx = json.JSONDecoder().raw_decode(s)
-
-  if not isinstance(obj, dict):
-    raise ValueError(f"Model JSON must be an object. Got: {type(obj)}")
-
-  rest = s[idx:].lstrip()
-  if not rest:
-    return obj, ""
-
-  # If trailing content is another JSON value, treat as "extra actions" and ignore.
-  try:
-    json.JSONDecoder().raw_decode(rest)
-    return obj, rest  # valid JSON remains -> model emitted multiple objects
-  except json.JSONDecodeError:
-    # trailing junk that's not JSON -> hard error
-    raise ValueError(f"Extra trailing non-JSON content after JSON object:\n{rest[:200]}")
-
-
-TOOL_NAMES = {"list_files", "read_file", "write_file", "grep"}
-def coerce_action(obj: Dict[str, Any]) -> Dict[str, Any]:
-  # Common mistake: {"type":"list_files","args":{...}}
-  if obj.get("type") in TOOL_NAMES and "name" not in obj:
-    return {"type": "tool_call", "name": obj["type"], "args": obj.get("args", {})}
-  return obj
-
-
-ALLOWED_KEYS = {"type", "name", "args", "summary", "changes"}
-def normalize_action(obj: Dict[str, Any]) -> Dict[str, Any]:
-  obj.setdefault("name", None)
-  obj.setdefault("args", None)
-  obj.setdefault("summary", None)
-  obj.setdefault("changes", None)
-  return obj
-
-
-def validate_action(obj: Dict[str, Any]) -> None:
-  t = obj.get("type")
-  if t == "tool_call":
-    if not isinstance(obj.get("name"), str) or not obj["name"]:
-      raise ValueError("tool_call requires non-empty string name")
-    if not isinstance(obj.get("args"), dict):
-      raise ValueError("tool_call requires args object")
-    if obj.get("summary") is not None or obj.get("changes") is not None:
-      raise ValueError("tool_call must not include summary/changes")
-
-  elif t == "final":
-    if not isinstance(obj.get("summary"), str) or not obj["summary"]:
-      raise ValueError("final requires non-empty string summary")
-    if not isinstance(obj.get("changes"), list):
-      raise ValueError("final requires changes array")
-    for i, ch in enumerate(obj["changes"]):
-      if not isinstance(ch, dict):
-        raise ValueError(f"changes[{i}] must be an object")
-      if set(ch.keys()) != {"path", "description"}:
-        raise ValueError(f"changes[{i}] must have exactly path,description")
-      if not isinstance(ch["path"], str) or not isinstance(ch["description"], str):
-        raise ValueError(f"changes[{i}] path/description must be strings")
-    if obj.get("name") is not None or obj.get("args") is not None:
-      raise ValueError("final must not include name/args")
-
-  else:
-    raise ValueError(f"Unknown type: {t}")
-
-
-def _loop_detect(history: List[Dict[str, Any]], k: int) -> bool:
-  # naive: if last k tool calls have same name, you're probably stuck
-  tool_calls = [h for h in history if h.get("kind") == "tool_call"]
-  if len(tool_calls) < k:
-    return False
-  last = tool_calls[-k:]
-  names = [x["name"] for x in last]
-  return len(set(names)) == 1
-
-
-def has_any_observation(history: List[Dict[str, Any]]) -> bool:
-    return any(h.get("kind") == "observation" for h in history)
+# Parsing and coercion responsibilities belong to the LLM adapter.
+# Adapters MUST return typed Action objects (`ToolCallAction` or `FinalAction`).
+# The agent no longer attempts to coerce or validate raw dict-shaped actions.
 
 
 class RepoAgent:
+
   def __init__(self, llm: LLM, tools: RepoTools, trace: Trace, cfg: AgentConfig):
     self.llm = llm
     self.tools = tools
     self.trace = trace
     self.cfg = cfg
-
+    self.prompt = Prompt()
 
   def run(self, goal: str, test_cmd: List[str]) -> Dict[str, Any]:
-    state: Dict[str, Any] = {
-        "notes": [],
-        "files_touched": [],
-        "last_test": None,
-    }
-    history: List[Dict[str, Any]] = []
+    """
+    Driver/Orchestrator
+    """
+    history = History()
+    controller = ActionController(self.tools, self.trace)
 
     for t in range(self.cfg.max_iters):
-      compact_history = history[-self.cfg.max_history:]
-      if _loop_detect(compact_history, self.cfg.loop_tripwire):
-        state["notes"].append("Loop detected: change approach, inspect different evidence, then replan.")
+      compact_history = history.to_prompt_list(self.cfg.max_history)
+      if history.detect_loop(self.cfg.loop_tripwire):
+        note = "Loop detected: change approach, inspect different evidence, then replan."
+        history.append_driver_note(note)
+        self.trace.log("driver_note", {"t": t, "note": note})
 
-      messages = [
-          {"role": "system", "content": system_prompt()},
-          {"role": "user", "content": user_prompt(goal, {"state": state, "history": compact_history})},
-      ]
+      summary = summarize_history(history, run_id=self.trace.run_id)
+      messages = self.prompt.compile_prompt(
+          goal=goal,
+          state=summary.to_dict(),
+          history=compact_history,
+      )
+
+      # Emit run_start at the beginning of the run (only once)
+      if t == 0:
+        self.trace.log("run_start", {"run_id": self.trace.run_id, "goal": goal})
 
       self.trace.log("llm_request", {"t": t, "messages": messages})
-      obj = self.llm.next_action(messages)
-      self.trace.log("llm_action", {"t": t, "obj": obj})
+      # Ask LLM for next action (now returns a typed Action or raises ActionParseError)
+      try:
+        action = self.llm.next_action(messages)
+      except ActionParseError as e:
+        # Adapter failed to return a typed Action — log and surface as runtime error.
+        self.trace.log("llm_parse_error", {"t": t, "error": str(e), "raw": getattr(self.llm, "_last_raw", None)})
+        raise RuntimeError("LLM adapter failed to produce a valid typed Action") from e
 
-      obj = coerce_action(obj)
-      obj = normalize_action(obj)
+      # Adapter MUST return a typed Action (ToolCallAction or FinalAction).
+      raw = getattr(self.llm, "_last_raw", None)
+      parsed_action = action
+      if not isinstance(parsed_action, (ToolCallAction, FinalAction)):
+        self.trace.log("llm_parse_error", {"t": t, "error": "LLM returned non-typed action", "raw": raw})
+        raise RuntimeError("LLM adapter must return a typed Action (ToolCallAction or FinalAction).")
 
-      # HARD GATE: no final before evidence
-      if obj["type"] == "final" and not has_any_observation(history):
-          obj = normalize_action({"type": "tool_call", "name": "list_files",
-                                  "args": {"rel_dir": ".", "max_files": 200}})
-      # Now validate the final action you will execute
-      validate_action(obj)
+      # Log both raw and action for auditability
+      self.trace.log("llm_action", {"t": t, "raw": raw, "action": parsed_action.to_dict()})
+      history.append_llm_action(raw or parsed_action.to_dict())
 
-      # HARD GATE: no final before evidence
-      if obj["type"] == "final" and not has_any_observation(history):
-          obj = {"type": "tool_call", "name": "list_files", "args": {"rel_dir": ".", "max_files": 200}}
+      # If the LLM reported trailing / extra text after a JSON object, log it to the trace
+      trailing = getattr(self.llm, "_last_trailing", None)
+      if trailing:
+        # keep the stored content reasonably sized
+        self.trace.log("llm_trailing_text", {"t": t, "trailing": trailing[:12000]})
+        note = "Model returned extra/trailing JSON; only the first object was used."
+        history.append_driver_note(note)
+        self.trace.log("driver_note", {"t": t, "note": note})
 
-      typ = obj["type"]
-      if typ == "final":
-        self.trace.log("final", obj)
-        return obj
+      # Now handle final
+      if isinstance(parsed_action, FinalAction):
 
-      # From here on, it MUST be a tool_call with valid name/args
-      name = obj["name"]
-      args = obj["args"]
-      history.append({"kind": "tool_call", "name": name, "args": args})
+        if not history.has_any_observation(): # HARD GATE: no final before evidence
+          parsed_action = ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 200})
 
-      if not isinstance(name, str) or not name.strip():
-        raise ValueError(f"tool_call missing/invalid name. Raw:\n{raw}")
-      if not isinstance(args, dict):
-        raise ValueError(f"tool_call missing/invalid args. Raw:\n{raw}")
+        summary = summarize_history(history, run_id=self.trace.run_id)
+        final_obj = parsed_action.to_dict()
+        # If we ran tests after any write_file, include a short test result summary
+        if summary.last_test is not None:
+          ok = summary.last_test.ok
+          out = (summary.last_test.output or "").strip()
+          reason = "All tests passed." if ok else (out.splitlines()[0] if out else "Tests failed.")
+          final_obj["test_result"] = {"ok": ok, "summary": reason, "output_snippet": out[:500]}
 
-      # dispatch action
-      if name == "list_files":
-        res = self.tools.list_files(**args)
-      elif name == "read_file":
-        res = self.tools.read_file(**args)
-      elif name == "write_file":
-        res = self.tools.write_file(**args)
-        state["files_touched"].append(args["rel_path"])
-      elif name == "grep":
-        res = self.tools.grep(**args)
-      elif name == "run_tests":
-        # model is not allowed to call this; ignore if it tries
-        res = type("X", (), {"ok": False, "output": "run_tests is driver-only", "meta": {}})()
-      else:
-        raise ValueError(f"Unknown tool: {name}")
+        self.trace.log("final", final_obj)
+        # emit run_end
+        self.trace.log("run_end", {"run_id": self.trace.run_id, "summary": final_obj.get("summary"), "state": summary.to_dict()})
+        return final_obj
 
-      obs = {"ok": res.ok, "output": res.output[:12000], "meta": res.meta}
-      history.append({"kind": "observation", "tool": name, "obs": obs})
-      self.trace.log("tool_result", {"t": t, "tool": name, "args": args, "obs": obs})
+      # From here on, it MUST be a ToolCallAction
+      history.append_tool_call(parsed_action.name, parsed_action.args)
 
-      # driver runs tests occasionally (you can tune this later)
-      if name in ("write_file",) and test_cmd:
+      # dispatch via ActionController
+      obs = controller.execute_action(parsed_action, history, t)
+
+      # driver runs tests if commanded
+      if parsed_action.name in ("write_file", ) and test_cmd:
         test_res = self.tools.run_tests(test_cmd)
-        state["last_test"] = {"ok": test_res.ok, "output": test_res.output[:12000]}
-        self.trace.log("tests", state["last_test"])
-        history.append({"kind": "observation", "tool": "driver.run_tests", "obs": state["last_test"]})
+        output_snippet = test_res.output[:12000] if test_res.output else ""
+        self.trace.log("tests", {"ok": test_res.ok, "output": output_snippet})
+        history.append_observation("driver.run_tests", {"ok": test_res.ok, "output": output_snippet})
 
-    return {"type": "final", "summary": "Stopped: max iters reached.", "changes": []}
+    summary = {"type": "final", "summary": "Stopped: max iters reached.", "changes": []}
+    # include last test summary if available
+    summary_state = summarize_history(history, run_id=self.trace.run_id)
+    if summary_state.last_test is not None:
+      ok = summary_state.last_test.ok
+      out = (summary_state.last_test.output or "").strip()
+      reason = "All tests passed." if ok else (out.splitlines()[0] if out else "Tests failed.")
+      summary["test_result"] = {"ok": ok, "summary": reason, "output_snippet": out[:500]}
+
+    self.trace.log("run_end", {"run_id": self.trace.run_id, "summary": summary["summary"], "state": summary_state.to_dict()})
+    return summary
