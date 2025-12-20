@@ -1,55 +1,91 @@
 # llm-repo-agent
 
-A simple loop-based repo agent that uses an LLM to choose single actions (tool calls) and runs them against a repository.
-
+A disciplined, loop-based repo fixer. The model chooses one action at a time (list/read/grep/write), the driver executes safely, runs your test command after writes, and records a full JSONL trace (including reflections) for replay and debugging.
 
 ---
 
-## Inspecting run traces 🔍
+## Quickstart
 
-The agent logs a JSONL trace (default `runs/trace.jsonl`) containing timestamped events for each run. Each event includes a `run_id` so you can filter runs.
+1) Install deps and the CLI:
+```bash
+poetry install
+poetry run repo-agent --help
+```
 
-You can inspect a run with the small helper CLI provided by the package:
+2) Run on QuixBugs (small, real bug):  
+```bash
+# Quick fix (usually one write): quicksort
+poetry run repo-agent \
+  --repo ~/projects/QuixBugs \
+  --goal "Fix quicksort so python_testcases/test_quicksort.py passes. Make the smallest correct change." \
+  --trace runs/trace.jsonl \
+  --test "python -m pytest -q python_testcases/test_quicksort.py"
+```
+
+3) Run a harder case to see reflection kick in:  
+```bash
+poetry run repo-agent \
+  --repo ~/projects/QuixBugs \
+  --goal "Fix breadth_first_search so python_testcases/test_breadth_first_search.py passes. Make the smallest correct change." \
+  --trace runs/trace.jsonl \
+  --test "python -m pytest -q python_testcases/test_breadth_first_search.py"
+```
+
+4) Inspect the trace:  
+```bash
+# All events
+poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --full
+
+# Only reflections
+poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --kind reflection --full
+
+# Only LLM prompt for a given request
+poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --kind llm_request --index 0 --pretty-only-prompt
+```
+
+---
+
+## What it does
+
+- **Constrained tools:** `list_files`, `read_file`, `grep`, `write_file`. No arbitrary shell, no network. Driver-only tests via `--test ...`.
+- **ReACT + CoT:** LLM produces typed actions with optional `thought`; the driver enforces one action per turn and a “no final before evidence” rule.
+- **Reflection:** On test failures, tool errors, or loop tripwire, a second LLM call distills lessons (`notes/next_focus/risks`) and logs them to history and trace.
+- **Observability:** Everything goes to JSONL (`runs/trace.jsonl`): prompts, tool calls/results, reflections, trailing text warnings, tests, finals.
+
+---
+
+## LLM adapter contract (for custom models)
+
+Return typed actions from `llm_repo_agent.actions`:
+- `ToolCallAction(name: str, args: dict, thought: Optional[str])`
+- `FinalAction(summary: str, changes: list, thought: Optional[str])`
+
+Set `_last_raw` (parsed JSON) and `_last_trailing` (extra text) on the adapter if available; the driver logs them. Legacy dict-shaped actions are rejected.
+
+Reflection uses `llm.reflect(messages)` (JSON mode) returning `Reflection(notes, next_focus, risks)`.
+
+---
+
+## How it works (short)
+
+1) Prompt = system rules + goal + compact history + run summary.  
+2) LLM returns one typed action. Driver executes via `ActionController`.  
+3) After `write_file`, driver runs your test command (if provided).  
+4) Reflection controller may trigger (failures/errors/loop) to add durable notes.  
+5) Loop until final or max iterations. Final output includes test_result and any touched-file fallback in `changes`.
+
+---
+
+## Dev / tests
 
 ```bash
-# Show events for a run (pass the run id used when running the agent)
-poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id>
-
-# Limit the number of events shown
-poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --max 50
-
-# Show only the raw LLM prompt for a specific llm_request event (no metadata)
-poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --kind llm_request --index 0 --pretty-only-prompt
-
-# Write the prompt for a specific llm_request event to a file for sharing or repro
-poetry run python -m llm_repo_agent.inspect_trace --trace runs/trace.jsonl --run <run_id> --kind llm_request --index 0 --dump-prompt /tmp/prompt.txt
-```
-Or use the Python API to reconstruct a run history and pretty-print it:
-
-```python
-from pathlib import Path
-from llm_repo_agent.trace import Trace
-
-trace = Trace(Path("runs/trace.jsonl"), run_id="<run_id>")
-history = trace.get_run_history("<run_id>")
-for ev in history:
-    print(ev)
+poetry run pytest
 ```
 
-This will output a sequence of `tool_call` and `observation` entries similar to the agent's in-memory history, which can be used to replay or analyze what happened during a run.
+Trace parsing utility: `poetry run python -m llm_repo_agent.inspect_trace --help`
 
 ---
 
-## LLM Adapter contract 🔧
+## Why this repo
 
-The agent expects LLM adapters to return *typed* Action objects. Adapters SHOULD parse raw model responses and return one of the action types defined in `llm_repo_agent.actions`:
-
-- `ToolCallAction(name: str, args: dict)` — instructs the agent to run a single tool with the provided name and args.
-- `FinalAction(summary: str, changes: list)` — signals task completion and optional repository changes.
-
-Adapters are also encouraged to capture raw model output for traceability by setting these attributes on themselves before returning an action:
-
-- `_last_raw` — the raw JSON-parsed object produced by the model
-- `_last_trailing` — any trailing text or extra JSON after the first parsed object (if present)
-
-Backward compatibility: the agent no longer accepts legacy dict-shaped actions; adapters MUST return typed actions to make behavior explicit and testable.
+Small, auditable example of an “agentic” loop with safety rails, typed actions, strict JSON prompting, reflection, and full traceability—designed to be easy to read, debug, and extend.***

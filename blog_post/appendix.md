@@ -1,13 +1,7 @@
-Most of my work lives in the “model builder” lane: take an objective, turn it into clean PyTorch, train it, evaluate it, and understand failure modes. That identity matters to me. I’m not trying to rebrand as an “agent engineer,” and I don’t think “agents” are a separate priesthood of clever prompts.
+## Appendix
 
-But the boundary between models and systems has collapsed. What ships is rarely a raw model—it’s a closed-loop system around a model: retrieval, tools, guardrails, evaluation, observability, and an oracle that tells you whether you’re actually improving. If you’ve built training loops and eval harnesses for modern ML, agent loops are the same discipline applied to a different control problem.
-
-I started building what I’d now call agentic systems back in 2023, before the ecosystem hardened into today’s frameworks and APIs. Back then, you couldn’t rely on schema enforcement or tool-calling interfaces. If you wanted structured behavior, you had to be explicit mid-prompt and assume the model would still violate the rules. The driver loop had to be fault-tolerant by design: detect malformed outputs, discard throwaway generations, retry, and keep the system moving forward without drifting.
-
-In this post, I’ll walk through a minimal repo automation loop built on those principles: an LLM that can inspect a codebase, propose the next action, execute tools (read/grep/write), and use tests as a ground-truth oracle. It produces a trace log for every run, and I’ll show an end-to-end example where the system fixes a real failing test in QuixBugs (quicksort) and verifies the result with pytest
-
-
-
+<!-- <a id="trace-output">
+**Figure 3** -->
 
 ### Result prints
 ```bash

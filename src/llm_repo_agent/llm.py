@@ -9,11 +9,15 @@ import json
 from types import SimpleNamespace
 
 from .actions import parse_action, ActionParseError, ToolCallAction, FinalAction
+from .reflection import parse_reflection, Reflection, ReflectionParseError
 
 
 class LLM(Protocol):
 
   def next_action(self, messages: List[Dict[str, str]]) -> Any:
+    ...
+
+  def reflect(self, messages: List[Dict[str, str]]) -> Any:
     ...
 
 
@@ -28,6 +32,7 @@ TOOLS = [
       "properties": {
         "rel_dir": {"type": "string"},
         "max_files": {"type": "integer"},
+        "thought": {"type": "string"},
       },
       "required": ["rel_dir", "max_files"],
     },
@@ -42,6 +47,7 @@ TOOLS = [
       "properties": {
         "rel_path": {"type": "string"},
         "max_chars": {"type": "integer"},
+        "thought": {"type": "string"},
       },
       "required": ["rel_path", "max_chars"],
     },
@@ -56,6 +62,7 @@ TOOLS = [
       "properties": {
         "rel_path": {"type": "string"},
         "content": {"type": "string"},
+        "thought": {"type": "string"},
       },
       "required": ["rel_path", "content"],
     },
@@ -71,6 +78,7 @@ TOOLS = [
         "pattern": {"type": "string"},
         "rel_dir": {"type": "string"},
         "max_hits": {"type": "integer"},
+        "thought": {"type": "string"},
       },
       "required": ["pattern", "rel_dir", "max_hits"],
     },
@@ -161,3 +169,35 @@ class OpenAIResponsesLLM:
       raise
 
     return action
+
+  def reflect(self, messages: List[Dict[str, str]]) -> Reflection:
+    resp = self.client.responses.create(
+      model=self.model,
+      input=messages,
+      temperature=self.temperature,
+      max_output_tokens=self.max_output_tokens,
+      text={"format": {"type": "json_object"}},  # JSON mode
+    )
+
+    txt = (getattr(resp, "output_text", "") or "").strip()
+    if not txt:
+      raise RuntimeError("Empty reflection response.")
+
+    decoder = json.JSONDecoder()
+    try:
+      obj, end = decoder.raw_decode(txt)
+    except json.JSONDecodeError:
+      snippet = txt[:500].replace("\n", "\\n")
+      raise RuntimeError(f"Could not parse reflection output as JSON. Leading text: {snippet!r}")
+
+    trailing = txt[end:].strip()
+    if trailing:
+      import warnings
+      warnings.warn("Reflection returned trailing text; using the first object.", UserWarning)
+
+    self._last_reflection_raw = obj
+    try:
+      return parse_reflection(obj)
+    except ReflectionParseError as e:
+      self._last_reflection_parse_error = True
+      raise

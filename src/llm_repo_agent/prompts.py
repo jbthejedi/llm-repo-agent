@@ -24,13 +24,17 @@ def system_prompt() -> str:
     "- If your response accidentally contains multiple JSON objects or trailing text, the agent will parse only the first JSON object and ignore the rest.\n"
     "- If more work is needed, choose the single best next tool_call and stop.\n\n"
 
+    "REASONING:\n"
+    "- Think step by step before you emit JSON.\n"
+    "- Include a concise 'thought' string (<=300 chars) in the JSON describing why this action is the best next step.\n\n"
+
     "ALLOWED ACTIONS:\n"
-    'A) {"type":"tool_call","name":<tool_name>,"args":{...}}\n'
-    'B) {"type":"final","summary":"...","changes":[{"path":"...","description":"..."}]}\n\n'
+    'A) {"type":"tool_call","name":<tool_name>,"args":{...},"thought":"..."}\n'
+    'B) {"type":"final","summary":"...","changes":[{"path":"...","description":"..."}],"thought":"..."}\n\n'
 
     "EXAMPLES:\n"
-    'Example tool_call: {"type":"tool_call","name":"list_files","args":{"rel_dir":".","max_files":20}}\n'
-    'Example final: {"type":"final","summary":"Found test command: pytest","changes":[]}\n\n'
+    'Example tool_call: {"type":"tool_call","name":"list_files","args":{"rel_dir":".","max_files":20},"thought":"Survey repo layout first."}\n'
+    'Example final: {"type":"final","summary":"Found test command: pytest","changes":[],"thought":"Goal satisfied; no edits made."}\n\n'
 
     "TOOL_CALL RULES:\n"
     "- type must be exactly 'tool_call'.\n"

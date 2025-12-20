@@ -38,6 +38,21 @@ class DriverNoteEvent:
     return {"kind": "driver_note", "note": self.note}
 
 
+@dataclass
+class ReflectionEvent:
+  notes: List[str]
+  next_focus: Optional[str]
+  risks: List[str]
+
+  def to_dict(self) -> Dict[str, Any]:
+    return {
+        "kind": "reflection",
+        "notes": list(self.notes),
+        "next_focus": self.next_focus,
+        "risks": list(self.risks),
+    }
+
+
 class History:
   def __init__(self):
     self.events: List[Dict[str, Any]] = []
@@ -53,6 +68,63 @@ class History:
 
   def append_driver_note(self, note: str) -> None:
     self.events.append(DriverNoteEvent(note=note).to_dict())
+
+  def append_reflection(self, notes: List[str], next_focus: Optional[str], risks: List[str], max_reflections: Optional[int] = None, dedup_window: Optional[int] = None) -> None:
+    """Add a reflection event with optional deduplication and cap."""
+    if dedup_window is None and max_reflections is not None:
+      dedup_window = max_reflections
+    dedup_window = dedup_window or 0
+
+    # Deduplicate against recent reflection notes
+    recent_reflections = [e for e in self.events if e.get("kind") == "reflection"]
+    recent_slice = recent_reflections[-dedup_window:] if dedup_window > 0 else recent_reflections
+    seen = set()
+    for e in recent_slice:
+      for n in e.get("notes") or []:
+        seen.add(n.strip().lower())
+      nf = e.get("next_focus")
+      if isinstance(nf, str):
+        seen.add(nf.strip().lower())
+      for r in e.get("risks") or []:
+        if isinstance(r, str):
+          seen.add(r.strip().lower())
+
+    deduped_notes: List[str] = []
+    for n in notes:
+      norm = n.strip().lower()
+      if norm and norm not in seen:
+        deduped_notes.append(n)
+        seen.add(norm)
+
+    deduped_risks: List[str] = []
+    for r in risks:
+      norm = r.strip().lower()
+      if norm and norm not in seen:
+        deduped_risks.append(r)
+        seen.add(norm)
+
+    dedup_next_focus = None
+    if next_focus:
+      norm = next_focus.strip().lower()
+      if norm and norm not in seen:
+        dedup_next_focus = next_focus
+        seen.add(norm)
+
+    if not deduped_notes and dedup_next_focus is None and not deduped_risks:
+      return
+
+    evt = ReflectionEvent(notes=deduped_notes or notes, next_focus=dedup_next_focus, risks=deduped_risks).to_dict()
+    self.events.append(evt)
+
+    # Cap reflections to last max_reflections
+    if max_reflections and max_reflections > 0:
+      reflection_indices = [i for i, e in enumerate(self.events) if e.get("kind") == "reflection"]
+      overflow = len(reflection_indices) - max_reflections
+      while overflow > 0 and reflection_indices:
+        idx = reflection_indices.pop(0)
+        self.events.pop(idx)
+        reflection_indices = [i - 1 if i > idx else i for i in reflection_indices]
+        overflow -= 1
 
   def touched_files(self) -> List[str]:
     """Return unique file paths touched by write_file observations in order."""

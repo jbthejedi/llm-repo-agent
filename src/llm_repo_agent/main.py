@@ -43,6 +43,16 @@ def main():
   # Nicely format final outputs when tests were run
   if isinstance(out, dict) and out.get("type") == "final":
     print(out.get("summary"))
+    changes = out.get("changes") or []
+    if changes:
+      print("Changes:")
+      for ch in changes:
+        path = ch.get("path")
+        desc = ch.get("description")
+        if path and desc:
+          print(f"- {path}: {desc}")
+        elif path:
+          print(f"- {path}")
     tr = out.get("test_result")
     if tr is not None:
       status = "PASSED" if tr.get("ok") else "FAILED"

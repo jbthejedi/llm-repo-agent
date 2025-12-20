@@ -13,6 +13,16 @@ from .summary import RunSummary, summarize_history
 from .history import History
 from .controller import ActionController
 from .actions import ToolCallAction, FinalAction, ActionParseError
+from .reflection_controller import ReflectionController, ReflectionConfig
+
+try:
+  from tqdm import tqdm
+except Exception:
+  class _TQDMStub:
+    @staticmethod
+    def write(msg: str) -> None:
+      print(msg)
+  tqdm = _TQDMStub()
 
 
 @dataclass
@@ -20,6 +30,7 @@ class AgentConfig:
   max_iters: int = 20
   max_history: int = 12
   loop_tripwire: int = 3
+  progress: bool = True
 
 
 # Parsing and coercion responsibilities belong to the LLM adapter.
@@ -35,6 +46,11 @@ class RepoAgent:
     self.trace = trace
     self.cfg = cfg
     self.prompt = Prompt()
+    self._progress = cfg.progress
+
+  def _p(self, msg: str) -> None:
+    if self._progress:
+      tqdm.write(msg)
 
   def run(self, goal: str, test_cmd: List[str]) -> Dict[str, Any]:
     """
@@ -42,14 +58,40 @@ class RepoAgent:
     """
     history = History()
     controller = ActionController(self.tools, self.trace)
+    reflection_controller = ReflectionController(
+        llm=self.llm,
+        trace=self.trace,
+        history=history,
+        cfg=ReflectionConfig(
+            enable=True,
+            max_reflections=5,
+            reflection_dedup_window=5,
+            reflect_on_success=False,
+            reflection_history_window=8,
+        ),
+        progress_cb=self._p,
+    )
 
-    for t in range(self.cfg.max_iters):
+    iterator = tqdm(range(self.cfg.max_iters), disable=not self._progress, desc="agent")
+
+    ##############################
+    # DRIVER
+    ##############################
+    for t in iterator:
+      self._p("")
+      self._p(f"[iter {t}] ------------------------------")
       compact_history = history.to_prompt_list(self.cfg.max_history)
+      loop_triggered = False
       if history.detect_loop(self.cfg.loop_tripwire):
         note = "Loop detected: change approach, inspect different evidence, then replan."
         history.append_driver_note(note)
         self.trace.log("driver_note", {"t": t, "note": note})
+        loop_triggered = True
+        self._p(f"[loop] iteration={t} tripwire triggered; adding note")
 
+      ##############################
+      # CRAFT PROMPT 
+      ##############################
       summary = summarize_history(history, run_id=self.trace.run_id)
       messages = self.prompt.compile_prompt(
           goal=goal,
@@ -60,7 +102,11 @@ class RepoAgent:
       # Emit run_start at the beginning of the run (only once)
       if t == 0:
         self.trace.log("run_start", {"run_id": self.trace.run_id, "goal": goal})
+        self._p(f"[start] goal='{goal}'")
 
+      ##############################
+      # SEND REQUEST TO AGENT
+      ##############################
       self.trace.log("llm_request", {"t": t, "messages": messages})
       # Ask LLM for next action (now returns a typed Action or raises ActionParseError)
       try:
@@ -70,6 +116,9 @@ class RepoAgent:
         self.trace.log("llm_parse_error", {"t": t, "error": str(e), "raw": getattr(self.llm, "_last_raw", None)})
         raise RuntimeError("LLM adapter failed to produce a valid typed Action") from e
 
+      ##############################
+      # PARSE ACTION
+      ##############################
       # Adapter MUST return a typed Action (ToolCallAction or FinalAction).
       raw = getattr(self.llm, "_last_raw", None)
       parsed_action = action
@@ -80,6 +129,11 @@ class RepoAgent:
       # Log both raw and action for auditability
       self.trace.log("llm_action", {"t": t, "raw": raw, "action": parsed_action.to_dict()})
       history.append_llm_action(raw or parsed_action.to_dict())
+      # progress log
+      if isinstance(parsed_action, ToolCallAction):
+        self._p(f"[llm] iteration={t} -> tool_call {parsed_action.name} {parsed_action.args} (thought={parsed_action.thought})")
+      else:
+        self._p(f"[llm] iteration={t} -> final summary='{parsed_action.summary}' (thought={parsed_action.thought})")
 
       # If the LLM reported trailing / extra text after a JSON object, log it to the trace
       trailing = getattr(self.llm, "_last_trailing", None)
@@ -90,7 +144,9 @@ class RepoAgent:
         history.append_driver_note(note)
         self.trace.log("driver_note", {"t": t, "note": note})
 
-      # Now handle final
+      ##############################
+      # HANDLE FINAL
+      ##############################
       if isinstance(parsed_action, FinalAction):
 
         if not history.has_any_observation(): # HARD GATE: no final before evidence
@@ -98,6 +154,9 @@ class RepoAgent:
 
         summary = summarize_history(history, run_id=self.trace.run_id)
         final_obj = parsed_action.to_dict()
+        # If model didn't report changes but we touched files, supply a minimal change list
+        if (not final_obj.get("changes")) and summary.files_touched:
+          final_obj["changes"] = [{"path": p, "description": "Edited file"} for p in summary.files_touched]
         # If we ran tests after any write_file, include a short test result summary
         if summary.last_test is not None:
           ok = summary.last_test.ok
@@ -108,20 +167,38 @@ class RepoAgent:
         self.trace.log("final", final_obj)
         # emit run_end
         self.trace.log("run_end", {"run_id": self.trace.run_id, "summary": final_obj.get("summary"), "state": summary.to_dict()})
+        self._p(f"[final] summary='{final_obj.get('summary')}' changes={final_obj.get('changes')}")
         return final_obj
 
       # From here on, it MUST be a ToolCallAction
       history.append_tool_call(parsed_action.name, parsed_action.args)
 
-      # dispatch via ActionController
+      ##############################
+      # ACTION CONTROLLER
+      ##############################
       obs = controller.execute_action(parsed_action, history, t)
+      self._p(f"[tool] iteration={t} {parsed_action.name} ok={obs.get('ok')} output={str(obs.get('output', '')[:160]).strip()}...")
+      latest_observation = {"tool": parsed_action.name, "observation": obs}
 
-      # driver runs tests if commanded
+      ################################
+      # RUNS TESTS IF COMMANDED
+      ################################
+      test_res = None
       if parsed_action.name in ("write_file", ) and test_cmd:
         test_res = self.tools.run_tests(test_cmd)
         output_snippet = test_res.output[:12000] if test_res.output else ""
         self.trace.log("tests", {"ok": test_res.ok, "output": output_snippet})
         history.append_observation("driver.run_tests", {"ok": test_res.ok, "output": output_snippet})
+        latest_observation = {"tool": "driver.run_tests", "observation": {"ok": test_res.ok, "output": output_snippet}}
+        status = "PASS" if test_res.ok else "FAIL"
+        self._p(f"[tests] iteration={t} {status} cmd={' '.join(test_cmd)}")
+
+
+      ##############################
+      # REFLECTION CONTROLLER
+      ##############################
+      if reflection_controller.should_reflect(loop_triggered=loop_triggered, obs=obs, test_res=test_res):
+        reflection_controller.run_reflection(goal=goal, latest_observation=latest_observation, t=t)
 
     summary = {"type": "final", "summary": "Stopped: max iters reached.", "changes": []}
     # include last test summary if available

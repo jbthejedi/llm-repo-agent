@@ -219,3 +219,5 @@ runs/quixbugs_trace.jsonl
 # or ignore all traces
 runs/*.jsonl
 runs/*.jsonl.old
+src/.DS_Store
+*.zip
