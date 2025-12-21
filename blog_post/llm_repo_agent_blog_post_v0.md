@@ -1,5 +1,3 @@
-# LLM Repo Coding Agent
-
 [llm-repo-agent on Github](https://github.com/jbthejedi/llm-repo-agent)
 
 ## TLDR
