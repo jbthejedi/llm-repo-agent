@@ -1,11 +1,13 @@
 from __future__ import annotations
 import argparse, os, uuid
 from pathlib import Path
+from typing import Optional
 
 from llm_repo_agent.agent import RepoAgent, AgentConfig
 from llm_repo_agent.llm import OpenAIResponsesLLM
 from llm_repo_agent.tools import RepoTools
 from llm_repo_agent.trace import Trace
+from llm_repo_agent.sandbox import materialize_repo_sandbox, cleanup_sandbox, Sandbox
 
 from dotenv import load_dotenv
 
@@ -17,10 +19,22 @@ def main():
   ap.add_argument("--goal", type=str, required=True, help="What you want the agent to do")
   ap.add_argument("--trace", type=str, default="runs/trace.jsonl")
   ap.add_argument("--test", type=str, default="", help='Test command, e.g. "python -m pytest -q"')
+  ap.add_argument("--sandbox", dest="sandbox", action=argparse.BooleanOptionalAction, default=True,
+                  help="Run against a temporary sandbox copy of the repo (default: enabled).")
+  ap.add_argument("--sandbox-dir", type=str, default=None, help="Optional explicit sandbox directory to use.")
+  ap.add_argument("--keep-sandbox", action="store_true", help="Keep the sandbox directory after the run.")
   args = ap.parse_args()
 
   repo_root = Path(args.repo).expanduser().resolve()
-  tools = RepoTools(repo_root=repo_root)
+  sandbox: Optional[Sandbox] = None
+  tools_root = repo_root
+  if args.sandbox:
+    sandbox_dest = Path(args.sandbox_dir).expanduser() if args.sandbox_dir else None
+    sandbox = materialize_repo_sandbox(repo_root, sandbox_dest)
+    tools_root = sandbox.root
+    print(f"[sandbox] using workspace at {tools_root}")
+
+  tools = RepoTools(repo_root=tools_root)
 
   run_id = uuid.uuid4().hex[:10]
   trace = Trace(
@@ -38,7 +52,13 @@ def main():
   agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=AgentConfig())
 
   test_cmd = args.test.split() if args.test.strip() else []
-  out = agent.run(goal=args.goal, test_cmd=test_cmd)
+  out = None
+  try:
+    out = agent.run(goal=args.goal, test_cmd=test_cmd)
+  finally:
+    if sandbox and not args.keep_sandbox:
+      cleanup_sandbox(sandbox)
+      print(f"[sandbox] cleaned up {sandbox.root}")
 
   # Nicely format final outputs when tests were run
   if isinstance(out, dict) and out.get("type") == "final":

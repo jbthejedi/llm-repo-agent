@@ -31,6 +31,8 @@ poetry run repo-agent \
   --test "python -m pytest -q python_testcases/test_breadth_first_search.py"
 ```
 
+Sandboxing: the CLI runs against a temporary workspace copy of the repo by default. Keep it with `--keep-sandbox` (to inspect artifacts) or disable with `--no-sandbox`.
+
 4) Inspect the trace:  
 ```bash
 # All events
