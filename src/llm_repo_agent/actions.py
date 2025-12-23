@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
+from .tool_schema import TOOL_NAMES
+
 
 @dataclass
 class ToolCallAction:
@@ -31,9 +33,6 @@ class FinalAction:
 
 class ActionParseError(Exception):
     pass
-
-
-TOOL_NAMES = {"list_files", "read_file", "write_file", "grep"}
 
 
 def parse_action(obj: Any) -> Union[ToolCallAction, FinalAction]:

@@ -3,14 +3,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-
-TOOL_SPEC = [
-    {"name": "list_files", "args": {"rel_dir": "string", "max_files": "int"}},
-    {"name": "read_file", "args": {"rel_path": "string", "max_chars": "int"}},
-    {"name": "write_file", "args": {"rel_path": "string", "content": "string"}},
-    {"name": "grep", "args": {"pattern": "string", "rel_dir": "string", "max_hits": "int"}},
-    {"name": "run_tests", "args": {"note": "Not callable by model. Driver-only."}},
-]
+from .tool_schema import PROMPT_TOOL_SPEC, ALLOWED_TOOL_NAMES_TEXT
 
 
 def system_prompt() -> str:
@@ -38,7 +31,7 @@ def system_prompt() -> str:
 
     "TOOL_CALL RULES:\n"
     "- type must be exactly 'tool_call'.\n"
-    "- name must be EXACTLY one of: list_files, read_file, write_file, grep\n"
+    f"- name must be EXACTLY one of: {ALLOWED_TOOL_NAMES_TEXT}\n"
     "- args must be an object.\n"
     "- Never put a tool name in the 'type' field.\n"
     "- NEVER call run_tests (driver-only).\n\n"
@@ -55,7 +48,7 @@ def system_prompt() -> str:
     "- 'changes' should be [] if you made no file edits.\n\n"
 
     "TOOLS:\n"
-    f"{json.dumps(TOOL_SPEC, indent=2)}\n"
+    f"{json.dumps(PROMPT_TOOL_SPEC, indent=2)}\n"
   )
 
 

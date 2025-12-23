@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from .actions import parse_action, ActionParseError, ToolCallAction, FinalAction
 from .reflection import parse_reflection, Reflection, ReflectionParseError
+from .tool_schema import OPENAI_TOOLS
 
 
 class LLM(Protocol):
@@ -19,71 +20,6 @@ class LLM(Protocol):
 
   def reflect(self, messages: List[Dict[str, str]]) -> Any:
     ...
-
-
-TOOLS = [
-  {
-    "type": "function",
-    "name": "list_files",
-    "description": "List files under a repo-relative directory.",
-    "parameters": {
-      "type": "object",
-      "additionalProperties": False,
-      "properties": {
-        "rel_dir": {"type": "string"},
-        "max_files": {"type": "integer"},
-        "thought": {"type": "string"},
-      },
-      "required": ["rel_dir", "max_files"],
-    },
-  },
-  {
-    "type": "function",
-    "name": "read_file",
-    "description": "Read a text file under the repo (repo-relative path).",
-    "parameters": {
-      "type": "object",
-      "additionalProperties": False,
-      "properties": {
-        "rel_path": {"type": "string"},
-        "max_chars": {"type": "integer"},
-        "thought": {"type": "string"},
-      },
-      "required": ["rel_path", "max_chars"],
-    },
-  },
-  {
-    "type": "function",
-    "name": "write_file",
-    "description": "Write/replace a file under the repo (repo-relative path).",
-    "parameters": {
-      "type": "object",
-      "additionalProperties": False,
-      "properties": {
-        "rel_path": {"type": "string"},
-        "content": {"type": "string"},
-        "thought": {"type": "string"},
-      },
-      "required": ["rel_path", "content"],
-    },
-  },
-  {
-    "type": "function",
-    "name": "grep",
-    "description": "Search for a pattern in files under a repo-relative directory.",
-    "parameters": {
-      "type": "object",
-      "additionalProperties": False,
-      "properties": {
-        "pattern": {"type": "string"},
-        "rel_dir": {"type": "string"},
-        "max_hits": {"type": "integer"},
-        "thought": {"type": "string"},
-      },
-      "required": ["pattern", "rel_dir", "max_hits"],
-    },
-  },
-]
 
 
 @dataclass
@@ -104,7 +40,7 @@ class OpenAIResponsesLLM:
     resp = self.client.responses.create(
       model=self.model,
       input=messages,
-      tools=TOOLS,
+      tools=OPENAI_TOOLS,
       parallel_tool_calls=False,   # prefer one call at a time 
       max_tool_calls=1,            # hard cap 
       temperature=self.temperature,
