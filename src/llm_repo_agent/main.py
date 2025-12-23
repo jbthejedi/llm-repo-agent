@@ -23,6 +23,13 @@ def main():
                   help="Run against a temporary sandbox copy of the repo (default: enabled).")
   ap.add_argument("--sandbox-dir", type=str, default=None, help="Optional explicit sandbox directory to use.")
   ap.add_argument("--keep-sandbox", action="store_true", help="Keep the sandbox directory after the run.")
+  ap.add_argument(
+      "--test-policy",
+      type=str,
+      choices=["on_write", "on_final", "never"],
+      default="on_write",
+      help="When to run tests: after each write (on_write), only before finishing (on_final), or never.",
+  )
   args = ap.parse_args()
 
   repo_root = Path(args.repo).expanduser().resolve()
@@ -49,7 +56,7 @@ def main():
   )
 
   llm = OpenAIResponsesLLM(model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
-  agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=AgentConfig())
+  agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=AgentConfig(test_policy=args.test_policy))
 
   test_cmd = args.test.split() if args.test.strip() else []
   out = None

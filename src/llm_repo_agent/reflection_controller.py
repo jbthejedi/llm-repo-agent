@@ -27,18 +27,18 @@ class ReflectionController:
     self.cfg = cfg
     self._progress = progress_cb or (lambda msg: None)
 
-  def should_reflect(self, *, loop_triggered: bool, action_observation: Optional[Any], test_res: Optional[Any]) -> bool:
+  def should_reflect(self, *, loop_triggered: bool, obs: Optional[Any], test_res: Optional[Any]) -> bool:
     if not self.cfg.enable:
       return False
     if loop_triggered:
       return True
     obs_ok = None
-    if isinstance(action_observation, ObservationEvent):
-      obs_ok = action_observation.observation.ok
-    elif isinstance(action_observation, dict):
-      obs_ok = action_observation.get("ok")
-      if obs_ok is None and isinstance(action_observation.get("observation"), dict):
-        obs_ok = action_observation["observation"].get("ok")
+    if isinstance(obs, ObservationEvent):
+      obs_ok = obs.observation.ok
+    elif isinstance(obs, dict):
+      obs_ok = obs.get("ok")
+      if obs_ok is None and isinstance(obs.get("observation"), dict):
+        obs_ok = obs["observation"].get("ok")
 
     if obs_ok is False:
       return True

@@ -64,10 +64,10 @@ def test_reflection_controller_gating_and_run(tmp_path):
 
     # Gating on failure
     failing_obs = ObservationEvent(tool="t", observation=Observation(ok=False, output="", meta={}))
-    assert rc.should_reflect(loop_triggered=False, action_observation=failing_obs, test_res=None)
+    assert rc.should_reflect(loop_triggered=False, obs=failing_obs, test_res=None)
     # Gating off on success when reflect_on_success False
     successful_obs = ObservationEvent(tool="t", observation=Observation(ok=True, output="", meta={}))
-    assert rc.should_reflect(loop_triggered=False, action_observation=successful_obs, test_res=None) is False
+    assert rc.should_reflect(loop_triggered=False, obs=successful_obs, test_res=None) is False
 
     rc.run_reflection(goal="g", latest_observation={"tool": "t", "observation": {"ok": False}}, t=0)
     reflections = [e for e in history.events if isinstance(e, ReflectionEvent)]

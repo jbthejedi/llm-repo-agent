@@ -33,6 +33,8 @@ poetry run repo-agent \
 
 Sandboxing: the CLI runs against a temporary workspace copy of the repo by default. Keep it with `--keep-sandbox` (to inspect artifacts) or disable with `--no-sandbox`.
 
+Test policy: default is `on_write` (run tests after each write). For eval rollouts use `--test-policy on_final` to run tests once at the end, or `--test-policy never` to skip driver-run tests.
+
 4) Inspect the trace:  
 ```bash
 # All events
