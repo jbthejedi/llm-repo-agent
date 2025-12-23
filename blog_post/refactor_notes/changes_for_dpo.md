@@ -1,190 +1,182 @@
-## What happens today (current behavior)
+## 1) Repo-level RAG
 
-Right now your driver does this:
+**Summary:** Add a retrieval subsystem (chunk + index + retrieve) and expose it as a new tool `search_repo`, logging retrieval traces so we can evaluate retrieval separately from generation.
 
-1. Model chooses an action
-2. If the action is `write_file`, the driver **immediately runs tests**
-3. The test output is:
+**What changes**
 
-   * logged to `Trace` (`trace.log("tests", ...)`)
-   * appended to `History` as an observation (`history.append_observation("driver.run_tests", ...)`)
-4. Next turn, the model effectively “sees” the fact that tests passed/failed via your derived summary/history.
+* **New module:** `llm_repo_agent/retrieval/`
 
-This block is the culprit:
+  * `chunker.py` — splits repo into chunks (start simple: function-level or file blocks)
+  * `index.py` — builds an index (embeddings + metadata)
+  * `store.py` — persistent storage (FAISS / sqlite / JSONL + numpy)
+  * `retrieve.py` — returns top-k chunks for a query
+* **New tool:** `search_repo(query, top_k, filters)` → returns:
 
-```py
-test_res = None
-if parsed_action.name in ("write_file", ) and test_cmd:
-  test_res = self.tools.run_tests(test_cmd)
-  ...
-  history.append_observation("driver.run_tests", {...})
-```
+  * chunk text
+  * file path + line ranges
+  * `chunk_id`
+  * score
 
-### Why that becomes a problem for eval + preference rollouts
+**Where it wires in**
 
-If the agent writes a file 5 times in one run, you run tests 5 times.
+* **RepoTools** gains `search_repo(...)`
+* **ActionController** dispatches `"search_repo"` like other tools
+* **History/Trace** log retrieval events:
 
-Now imagine preference data generation where you do N rollouts per task:
+  * query + parameters
+  * retrieved `chunk_id`s + scores
+  * what context was injected into the model prompt
 
-* tasks = 30
-* rollouts per task = 8
-* avg writes per rollout = 4
-* tests per rollout = 4 (today)
+**Why this matters**
 
-Total test executions = 30 * 8 * 4 = **960 test runs**
-
-That’s the “extra test runs” explosion. It kills your 2-week timeline and makes eval slow/noisy.
-
-Also: it changes the “agent capability” you’re measuring, because the model is getting iterative feedback every write, which may or may not be what you want for a given benchmark.
+* You can answer “did the model fail because retrieval was bad, or because generation was bad?”—which is what serious teams care about.
 
 ---
 
-## What “test_policy” means
+## 2) Workspace sandbox
 
-“test_policy” is simply: **when does the driver run tests?**
+**Summary:** Run each attempt in an isolated working copy (git worktree / temp copy) so rollouts, patching, and tests are safe and reproducible.
 
-You’re not changing *what tests are*, just *when they run*.
+**What changes**
 
-Think of it as a trigger switch for `self.tools.run_tests(test_cmd)`.
+* **New module:** `llm_repo_agent/workspace.py`
 
----
+  * creates a disposable repo per run/attempt (best: `git worktree`, simplest: `copytree`)
+  * manages cleanup + artifact retention (optional)
 
-## Policy: `on_write`
+**Where it wires in**
 
-### Trigger condition
+* Driver (`RepoAgent.run`) starts by creating a workspace root.
+* RepoTools takes `root_dir=workspace_root` (instead of operating on your original repo).
 
-Run tests whenever the agent performs a `write_file`.
+**Why this matters**
 
-### Behavior
-
-* Tests can run many times per run.
-* The model gets rapid feedback and can iterate: write → test → fix → test → fix.
-
-### What gets logged
-
-Same as today:
-
-* `Trace` has many `"tests"` events.
-* `History` has many `"driver.run_tests"` observations.
-* `final_obj["test_result"]` is easy because `summary.last_test` exists (your code already relies on that).
-
-### Best for
-
-Interactive use / “fix my repo” mode, where you want fast feedback loops.
+* For DPO you’ll generate **multiple candidates per task**. You need to apply/undo safely and run tests without contaminating state.
 
 ---
 
-## Policy: `on_final`
+## 3) Eval harness
 
-### Trigger condition
+**Summary:** Add a suite runner that executes tasks, scores them (tests pass/fail), and emits a report + traces so you can measure progress across models and versions.
 
-Run tests exactly once **at the end of the run**.
+**What changes**
 
-There are two ways to define “end”:
+* **New module:** `llm_repo_agent/eval/`
 
-* When the model returns `FinalAction`
-* Or when you stop due to max iters / abort
+  * `tasks.py` — `TaskSpec` (repo, goal, test_cmd, metadata)
+  * `runner.py` — runs tasks, collects results
+  * `metrics.py` — computes:
 
-### Behavior
+    * success rate (tests pass/fail)
+    * avg steps / tool calls
+    * retrieval stats (queries, top-k, context usage)
+    * loop failures / reflection triggers
+  * `report.py` — writes `report.json` + aggregates traces
 
-* During the run: **no auto tests** after `write_file`.
-* At the end: run tests once and attach the result.
+**CLI changes**
 
-### What gets logged
+* Turn `main.py` into subcommands:
 
-* Exactly one `"tests"` event in the trace
-* Exactly one `"driver.run_tests"` observation in history
-* `final_obj["test_result"]` still works because you append the final test result to history before producing final output.
+  * `repo-agent index --repo ...`
+  * `repo-agent run --repo ... --goal ... --test ...`
+  * `repo-agent eval --suite eval/suites/my_suite.json`
 
-### Why this is valuable for eval + DPO
+**Output**
 
-* Bounded compute: 1 test run per rollout instead of “per write”.
-* Cleaner preference signal: your “chosen vs rejected” can just be based on that final outcome.
-* Makes rollouts comparable (each rollout gets one final scoring pass).
+* Per-task trace JSONL (you already do this)
+* Aggregate report JSON with baseline scores + deltas later
 
-### Best for
+**Why this matters**
 
-Eval harness runs and preference rollouts where you care about throughput and consistent scoring.
-
----
-
-## Policy: `never`
-
-### Trigger condition
-
-The driver never runs tests.
-
-### Behavior
-
-* The agent never sees test feedback.
-* You must score outside the agent (in the eval harness / preference scorer).
-
-### What gets logged
-
-* No `"tests"` events in trace
-* No `"driver.run_tests"` in history
-* `final_obj["test_result"]` would be absent unless you special-case it.
-
-### Best for
-
-Benchmarks where you explicitly want “no execution feedback,” or when the evaluator is the only place allowed to run commands.
-
-(For your project, you *might* use this later, but you don’t need it to ship the two-week MVP.)
+* This is the difference between a “toy agent demo” and a **measured research system**.
 
 ---
 
-## The minimal code change (exactly what you do)
+## 4) Preference data generation
 
-### 1) Add the flag to `AgentConfig`
+**Summary:** Turn eval into training data by running multiple rollouts per task, scoring outcomes (tests), and converting them into (chosen, rejected) preference pairs for DPO.
 
-In `agent.py`:
+**What changes**
 
-```py
-@dataclass
-class AgentConfig:
-  ...
-  test_policy: str = "on_write"  # "on_write" | "on_final" | "never"
-```
+* **New module:** `llm_repo_agent/prefs/`
 
-### 2) Gate the existing “run tests after write_file” block
+  * `rollouts.py` — for each `TaskSpec`, run **N rollouts** with stochasticity (temperature, seeds)
+  * `score.py` — score each rollout:
 
-Replace:
+    * primary oracle: tests pass/fail
+    * optional: lint/typecheck, smaller diff, fewer files touched
+  * `pairs.py` — produce preference pairs:
 
-```py
-if parsed_action.name in ("write_file", ) and test_cmd:
-```
+    * chosen = best-scoring rollout
+    * rejected = lower-scoring rollout(s)
 
-with:
+**Dataset format**
 
-```py
-if self.cfg.test_policy == "on_write" and parsed_action.name == "write_file" and test_cmd:
-```
+* Write `dpo_dataset.jsonl` with:
 
-### 3) Add “run once at the end” logic for `on_final`
+  * `prompt` (task goal + minimal context)
+  * `chosen` (winning patch/response)
+  * `rejected` (losing patch/response)
+  * `meta` (scores, test outputs summary, trace IDs, commit diff metadata)
 
-Right before you log the final action (or before `run_end`), add:
+**Why this matters**
 
-```py
-if self.cfg.test_policy == "on_final" and test_cmd:
-    test_res = self.tools.run_tests(test_cmd)
-    output_snippet = test_res.output[:12000] if test_res.output else ""
-    self.trace.log("tests", {"ok": test_res.ok, "output": output_snippet})
-    history.append_observation("driver.run_tests", {"ok": test_res.ok, "output": output_snippet})
-```
-
-This ensures `summary.last_test` exists so your existing code that injects `test_result` into the final object continues to work (your tests currently assert that).
-
-### 4) For `never`
-
-You can initially implement it as simply “skip tests entirely.” That means final output won’t have `test_result`. If you want to preserve your current invariant (“final includes test_result whenever test_cmd exists”), then `never` shouldn’t exist yet—or it should be renamed to something like `external` and handled in the eval harness instead.
+* You’ve built the core of “RLHF for code” without needing human labelers: **tests become the preference signal**.
 
 ---
 
-## Practical recommendation for your RLHF/DPO build
+## 5) DPO training
 
-* **Interactive runs:** `on_write`
-* **Eval runs / preference rollouts:** `on_final`
+**Summary:** Add a clean post-training pipeline that consumes `dpo_dataset.jsonl`, runs DPO (often via LoRA), produces a checkpoint/adapter, and then you re-run eval to show measurable improvement.
 
-That gives you the compute control you need without changing your agent’s conceptual design.
+**What changes**
 
-If you later want the model to *choose* when to run tests, you’d add a `run_tests` tool callable by the model—but that’s a separate step, and not required to ship the MVP.
+* **New module:** `llm_repo_agent/post_training/`
+
+  * `train_dpo.py`
+
+    * loads preference dataset
+    * trains with DPO using a standard implementation (e.g., HF/TRL-style)
+    * outputs a checkpoint or LoRA adapter
+
+**LLM adapter changes**
+
+* Add a local model backend alongside your API backend:
+
+  * `HFLocalLLM` (loads local checkpoint/adapter)
+  * optionally `VLLMEndpointLLM` (served model)
+* CLI can select:
+
+  * baseline: `--llm openai:...`
+  * tuned: `--llm hf:./checkpoints/dpo_run_001`
+
+**Why this matters**
+
+* You can run “before vs after” eval and show deltas—this is what converts skepticism into respect.
+
+---
+
+## 6) Prompt + control-loop tweaks
+
+**Summary:** Minimal prompt updates so the agent learns a reliable workflow (retrieve → inspect → patch → test), while preserving your driver invariants (one action/turn, step limits, full trace).
+
+**What changes**
+
+* Prompt updates:
+
+  * teach the model `search_repo` exists + when to use it
+  * encourage “retrieve before guessing” and “run tests before final”
+* Control-loop remains strict:
+
+  * one action per turn (your invariant)
+  * step limit + stop conditions
+  * “stuck” detection + reflection triggers (your existing ReflectionController)
+* Logging stays first-class:
+
+  * every tool call + observation
+  * every retrieval injection
+  * every test output summary
+
+**Why this matters**
+
+* Most agent demos fail because they’re un-debuggable. Your scaffold already prevents that—this step keeps it true as you add RAG + training.
