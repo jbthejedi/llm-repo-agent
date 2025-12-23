@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from .history import History
+from .history import DriverNoteEvent, ObservationEvent, ReflectionEvent
 
 
 @dataclass
@@ -45,27 +46,18 @@ def summarize_history(history: History, run_id: Optional[str] = None) -> RunSumm
   last_test: Optional[TestResult] = None
 
   for e in history.events:
-    kind = e.get("kind")
-    if kind == "driver_note":
-      note = e.get("note")
-      if isinstance(note, str):
-        notes.append(note)
-    elif kind == "reflection":
-      for n in e.get("notes") or []:
-        if isinstance(n, str):
-          reflection_notes.append(n)
-      nf = e.get("next_focus")
-      if isinstance(nf, str):
-        reflection_next_focus.append(nf)
-      for r in e.get("risks") or []:
-        if isinstance(r, str):
-          reflection_risks.append(r)
-    elif kind == "observation" and e.get("tool") == "driver.run_tests":
-      obs = e.get("obs") or {}
-      ok = obs.get("ok")
-      output = obs.get("output") or ""
-      if isinstance(ok, bool):
-        last_test = TestResult(ok=ok, output=output)
+    if isinstance(e, DriverNoteEvent):
+      notes.append(e.note)
+    elif isinstance(e, ReflectionEvent):
+      for n in e.notes or []:
+        reflection_notes.append(n)
+      if e.next_focus:
+        reflection_next_focus.append(e.next_focus)
+      for r in e.risks or []:
+        reflection_risks.append(r)
+    elif isinstance(e, ObservationEvent) and e.tool == "driver.run_tests":
+      if isinstance(e.observation.ok, bool):
+        last_test = TestResult(ok=e.observation.ok, output=e.observation.output)
 
   files_touched = history.touched_files()
 

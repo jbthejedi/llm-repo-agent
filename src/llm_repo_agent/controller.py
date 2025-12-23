@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from .tools import RepoTools
-from .trace import Trace
-from .history import History
+from .trace import Trace, DriverNotePayload, ToolResultPayload
+from .history import History, Observation, ObservationEvent, DriverNoteEvent
 
 
 class ActionController:
@@ -11,8 +11,8 @@ class ActionController:
         self.tools = tools
         self.trace = trace
 
-    def execute(self, name: str, args: Dict[str, Any], history: History, t: int) -> Dict[str, Any]:
-        # Dispatch action to appropriate tool and return observation dict
+    def execute(self, name: str, args: Dict[str, Any], history: History, t: int) -> ObservationEvent:
+        # Dispatch action to appropriate tool and return observation event
         if name == "list_files":
             res = self.tools.list_files(**args)
         elif name == "read_file":
@@ -23,8 +23,9 @@ class ActionController:
             rel_path = args.get("rel_path")
             if isinstance(rel_path, str):
                 note = f"touched {rel_path}"
-                history.append_driver_note(note)
-                self.trace.log("driver_note", {"t": t, "note": note})
+                note_event = DriverNoteEvent(note=note)
+                history.append_driver_note(note_event)
+                self.trace.log("driver_note", DriverNotePayload(t=t, note=note))
         elif name == "grep":
             res = self.tools.grep(**args)
         elif name == "run_tests":
@@ -33,12 +34,13 @@ class ActionController:
         else:
             raise ValueError(f"Unknown tool: {name}")
 
-        obs = {"ok": res.ok, "output": res.output[:12000], "meta": res.meta}
-        history.append_observation(name, obs)
-        self.trace.log("tool_result", {"t": t, "tool": name, "args": args, "obs": obs})
+        observation = Observation.from_tool_result(res)
+        obs_event = ObservationEvent(tool=name, observation=observation)
+        history.append_observation(obs_event)
+        self.trace.log("tool_result", ToolResultPayload(t=t, tool=name, args=args, obs=observation))
 
         # run tests if write_file and test_cmd provided is responsibility of agent loop;
-        return obs
+        return obs_event
 
-    def execute_action(self, action, history: History, t: int) -> Dict[str, Any]:
+    def execute_action(self, action, history: History, t: int) -> ObservationEvent:
         return self.execute(action.name, action.args, history, t)

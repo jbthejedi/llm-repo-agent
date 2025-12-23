@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +15,100 @@ class TraceEvent:
   meta: Dict[str, Any]
 
 
+@dataclass
+class TracePayload:
+  def to_dict(self) -> Dict[str, Any]:
+    return asdict(self)
+
+
+@dataclass
+class RunStartPayload(TracePayload):
+  run_id: str
+  goal: str
+
+
+@dataclass
+class RunEndPayload(TracePayload):
+  run_id: str
+  summary: str
+  state: Dict[str, Any]
+
+
+@dataclass
+class LLMRequestPayload(TracePayload):
+  t: int
+  messages: List[Dict[str, Any]]
+
+
+@dataclass
+class LLMParseErrorPayload(TracePayload):
+  t: int
+  error: str
+  raw: Any
+
+
+@dataclass
+class LLMActionPayload(TracePayload):
+  t: int
+  raw: Any
+  action: Dict[str, Any]
+
+
+@dataclass
+class LLMTrailingTextPayload(TracePayload):
+  t: int
+  trailing: str
+
+
+@dataclass
+class DriverNotePayload(TracePayload):
+  t: int
+  note: str
+
+
+@dataclass
+class ToolResultPayload(TracePayload):
+  t: int
+  tool: str
+  args: Dict[str, Any]
+  obs: Any
+
+  def to_dict(self) -> Dict[str, Any]:
+    obs_dict = None
+    if self.obs is None:
+      obs_dict = None
+    elif hasattr(self.obs, "to_dict"):
+      obs_dict = self.obs.to_dict()
+    elif is_dataclass(self.obs):
+      obs_dict = asdict(self.obs)
+    else:
+      obs_dict = self.obs
+    return {"t": self.t, "tool": self.tool, "args": self.args, "obs": obs_dict}
+
+
+@dataclass
+class TestsPayload(TracePayload):
+  ok: bool
+  output: str
+
+
+@dataclass
+class ReflectionRequestPayload(TracePayload):
+  t: int
+  messages: List[Dict[str, Any]]
+
+
+@dataclass
+class ReflectionPayload(TracePayload):
+  t: int
+  reflection: Dict[str, Any]
+
+
+@dataclass
+class FinalPayload(TracePayload):
+  final: Dict[str, Any]
+
+
 class Trace:
 
   def __init__(self, path: Path, run_id: str, meta: Optional[Dict[str, Any]] = None):
@@ -23,8 +117,20 @@ class Trace:
     self.meta = meta or {}
     self.path.parent.mkdir(parents=True, exist_ok=True)
 
-  def log(self, kind: str, payload: Dict[str, Any]) -> None:
-    evt = TraceEvent(ts=time.time(), kind=kind, payload=payload, run_id=self.run_id, meta=self.meta)
+  def _payload_to_dict(self, payload: Any) -> Dict[str, Any]:
+    if payload is None:
+      return {}
+    if hasattr(payload, "to_dict"):
+      return payload.to_dict()
+    if is_dataclass(payload):
+      return asdict(payload)
+    if isinstance(payload, dict):
+      return payload
+    raise TypeError(f"Unsupported payload type for trace logging: {type(payload)}")
+
+  def log(self, kind: str, payload: Any) -> None:
+    payload_dict = self._payload_to_dict(payload)
+    evt = TraceEvent(ts=time.time(), kind=kind, payload=payload_dict, run_id=self.run_id, meta=self.meta)
     with self.path.open("a", encoding="utf-8") as f:
       f.write(json.dumps(asdict(evt), ensure_ascii=False) + "\n")
 

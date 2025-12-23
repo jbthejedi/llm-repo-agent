@@ -1,7 +1,7 @@
 import pytest
 
 from llm_repo_agent.reflection import parse_reflection, ReflectionParseError
-from llm_repo_agent.history import History
+from llm_repo_agent.history import History, Observation, ObservationEvent, ReflectionEvent
 from llm_repo_agent.reflection_controller import ReflectionController, ReflectionConfig
 from llm_repo_agent.trace import Trace
 from llm_repo_agent.reflection import Reflection
@@ -22,26 +22,26 @@ def test_parse_reflection_requires_notes():
 
 def test_history_reflection_dedup_and_cap():
     h = History()
-    h.append_reflection(["note a"], None, [], max_reflections=2, dedup_window=2)
-    h.append_reflection(["note a", "note b"], None, [], max_reflections=2, dedup_window=2)
-    h.append_reflection(["note c"], "focus", ["risk"], max_reflections=2, dedup_window=2)
-    reflections = [e for e in h.events if e.get("kind") == "reflection"]
+    h.append_reflection(ReflectionEvent(notes=["note a"], next_focus=None, risks=[]), max_reflections=2, dedup_window=2)
+    h.append_reflection(ReflectionEvent(notes=["note a", "note b"], next_focus=None, risks=[]), max_reflections=2, dedup_window=2)
+    h.append_reflection(ReflectionEvent(notes=["note c"], next_focus="focus", risks=["risk"]), max_reflections=2, dedup_window=2)
+    reflections = [e for e in h.events if isinstance(e, ReflectionEvent)]
     assert len(reflections) == 2  # capped
-    all_notes = [n for e in reflections for n in e.get("notes", [])]
+    all_notes = [n for e in reflections for n in e.notes]
     assert "note b" in all_notes
     assert "note c" in all_notes
 
 
 def test_history_reflection_dedup_next_focus_and_risks():
     h = History()
-    h.append_reflection(["note a"], "focus1", ["risk1"], max_reflections=3, dedup_window=3)
-    h.append_reflection(["note a", "note b"], "focus1", ["risk1", "risk2"], max_reflections=3, dedup_window=3)
-    reflections = [e for e in h.events if e.get("kind") == "reflection"]
+    h.append_reflection(ReflectionEvent(notes=["note a"], next_focus="focus1", risks=["risk1"]), max_reflections=3, dedup_window=3)
+    h.append_reflection(ReflectionEvent(notes=["note a", "note b"], next_focus="focus1", risks=["risk1", "risk2"]), max_reflections=3, dedup_window=3)
+    reflections = [e for e in h.events if isinstance(e, ReflectionEvent)]
     assert len(reflections) == 2
     second = reflections[-1]
-    assert "note b" in second["notes"]  # deduped to new content
-    assert "risk2" in second["risks"]
-    assert second.get("next_focus") is None  # dedupbed out because already seen
+    assert "note b" in second.notes  # deduped to new content
+    assert "risk2" in second.risks
+    assert second.next_focus is None  # dedupbed out because already seen
 
 
 def test_reflection_controller_gating_and_run(tmp_path):
@@ -63,14 +63,16 @@ def test_reflection_controller_gating_and_run(tmp_path):
     )
 
     # Gating on failure
-    assert rc.should_reflect(loop_triggered=False, obs={"ok": False}, test_res=None)
+    failing_obs = ObservationEvent(tool="t", observation=Observation(ok=False, output="", meta={}))
+    assert rc.should_reflect(loop_triggered=False, action_observation=failing_obs, test_res=None)
     # Gating off on success when reflect_on_success False
-    assert rc.should_reflect(loop_triggered=False, obs={"ok": True}, test_res=None) is False
+    successful_obs = ObservationEvent(tool="t", observation=Observation(ok=True, output="", meta={}))
+    assert rc.should_reflect(loop_triggered=False, action_observation=successful_obs, test_res=None) is False
 
     rc.run_reflection(goal="g", latest_observation={"tool": "t", "observation": {"ok": False}}, t=0)
-    reflections = [e for e in history.events if e.get("kind") == "reflection"]
+    reflections = [e for e in history.events if isinstance(e, ReflectionEvent)]
     assert len(reflections) == 1
-    assert reflections[0]["notes"] == ["n1"]
+    assert reflections[0].notes == ["n1"]
 
     # Trace has reflection event
     trace_kinds = [line for line in (tmp_path / "trace.jsonl").read_text().splitlines() if '"reflection"' in line]
