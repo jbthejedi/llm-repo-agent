@@ -221,3 +221,4 @@ runs/*.jsonl
 runs/*.jsonl.old
 src/.DS_Store
 *.zip
+runs/*

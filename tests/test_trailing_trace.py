@@ -2,27 +2,26 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from llm_repo_agent.agent import RepoAgent, AgentConfig
-from llm_repo_agent.llm import LLM
-from llm_repo_agent.tools import RepoTools
-from llm_repo_agent.trace import Trace
+import llm_repo_agent.agent as agent_module
+import llm_repo_agent.tools as tools_module
+import llm_repo_agent.trace as trace_module
+import llm_repo_agent.actions as actions_module
 
 
 def test_agent_logs_trailing_json(tmp_path):
     # Dummy LLM that sets _last_trailing and returns a final object
-    from llm_repo_agent.actions import FinalAction
     class DummyLLM:
         def next_action(self, messages):
             self._last_trailing = '{"type":"final","summary":"second"}'
-            return FinalAction(summary="first", changes=[])
+            return actions_module.FinalAction(summary="first", changes=[])
 
     repo_root = Path(".")
-    tools = RepoTools(repo_root=repo_root)
+    tools = tools_module.RepoTools(repo_root=repo_root)
     trace_file = tmp_path / "trace.jsonl"
-    trace = Trace(trace_file, run_id="test")
+    trace = trace_module.Trace(trace_file, run_id="test")
 
     llm = DummyLLM()
-    agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=AgentConfig())
+    agent = agent_module.RepoAgent(llm=llm, tools=tools, trace=trace, cfg=agent_module.AgentConfig())
 
     res = agent.run(goal="Just test logging", test_cmd=[])
     assert isinstance(res, dict)
