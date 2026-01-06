@@ -37,7 +37,10 @@ A disciplined, loop-based repository fixer powered by LLMs. The model chooses on
 ---
 
 <figure id="fig-agent-main-execution">
-<img src="./blog_post" />
+  <img src="./blog_post/diagrams/main_execution.png" alt="Diagram of the main execution." />
+  <figcaption>
+    Fig 2: A diagram of the execution from main.
+  </figcaption>
 </figure>
 
 ## Features
