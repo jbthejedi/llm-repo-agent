@@ -53,6 +53,7 @@ class AgentConfig:
   max_history: int = 12
   loop_tripwire: int = 3
   progress: bool = True
+  test_policy: str = "on_write"  # "on_write" | "on_final" | "never"
 
 
 # Parsing and coercion responsibilities belong to the LLM adapter.
@@ -80,6 +81,17 @@ class RepoAgent:
     """
     history = History()
     controller = ActionController(self.tools, self.trace)
+    def _run_and_record_tests(iter_label: str):
+      test_res_local = self.tools.run_tests(test_cmd)
+      output_snippet_local = test_res_local.output[:12000] if test_res_local.output else ""
+      self.trace.log("tests", TestsPayload(ok=test_res_local.ok, output=output_snippet_local))
+      test_event_local = ObservationEvent(tool="driver.run_tests", observation=Observation.from_tool_result(test_res_local))
+      history.append_observation(test_event_local)
+      status_local = "PASS" if test_res_local.ok else "FAIL"
+      self._p(f"[tests] iteration={iter_label} {status_local} cmd={' '.join(test_cmd)}")
+      return test_res_local, test_event_local
+
+    tests_run_for_final = False
     reflection_controller = ReflectionController(
         llm=self.llm,
         trace=self.trace,
@@ -177,6 +189,11 @@ class RepoAgent:
       ##############################
       if isinstance(parsed_action, FinalAction):
 
+        if self.cfg.test_policy == "on_final" and test_cmd and not tests_run_for_final:
+          test_res, test_event = _run_and_record_tests(t)
+          latest_observation = test_event.to_dict()
+          tests_run_for_final = True
+
         if not history.has_any_observation():  # HARD GATE: no final before evidence
           parsed_action = ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 200})
 
@@ -216,25 +233,22 @@ class RepoAgent:
       # RUNS TESTS IF COMMANDED
       ################################
       test_res = None
-      if parsed_action.name in ("write_file", ) and test_cmd:
-        test_res = self.tools.run_tests(test_cmd)
-        output_snippet = test_res.output[:12000] if test_res.output else ""
-        self.trace.log("tests", TestsPayload(ok=test_res.ok, output=output_snippet))
-        test_observation = Observation.from_tool_result(test_res)
-        test_event = ObservationEvent(tool="driver.run_tests", observation=test_observation)
-        history.append_observation(test_event)
+      if self.cfg.test_policy == "on_write" and parsed_action.name == "write_file" and test_cmd:
+        test_res, test_event = _run_and_record_tests(t)
         latest_observation = test_event.to_dict()
-        status = "PASS" if test_res.ok else "FAIL"
-        self._p(f"[tests] iteration={t} {status} cmd={' '.join(test_cmd)}")
 
       ##############################
       # REFLECTION CONTROLLER
       ##############################
-      if reflection_controller.should_reflect(loop_triggered=loop_triggered, action_observation=obs_event, test_res=test_res):
+      if reflection_controller.should_reflect(loop_triggered=loop_triggered, obs=obs_event, test_res=test_res):
         reflection_controller.run_reflection(goal=goal, latest_observation=latest_observation, t=t)
 
     summary = {"type": "final", "summary": "Stopped: max iters reached.", "changes": []}
     # include last test summary if available
+    if self.cfg.test_policy == "on_final" and test_cmd and not tests_run_for_final:
+      _run_and_record_tests("final")
+      tests_run_for_final = True
+
     summary_state = summarize_history(history, run_id=self.trace.run_id)
     if summary_state.last_test is not None:
       ok = summary_state.last_test.ok

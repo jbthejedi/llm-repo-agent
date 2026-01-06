@@ -1,30 +1,30 @@
 import json
 from pathlib import Path
 
-from llm_repo_agent.agent import RepoAgent, AgentConfig
-from llm_repo_agent.tools import RepoTools
-from llm_repo_agent.trace import Trace
+import llm_repo_agent.agent as agent_module
+import llm_repo_agent.tools as tools_module
+import llm_repo_agent.trace as trace_module
+import llm_repo_agent.actions as actions_module
 
 
 def test_run_start_and_end_and_history(tmp_path):
-    from llm_repo_agent.actions import ToolCallAction, FinalAction
     class DummyLLM:
         def __init__(self):
             self.calls = 0
         def next_action(self, messages):
             self.calls += 1
             if self.calls == 1:
-                return ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 10})
+                return actions_module.ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 10})
             else:
-                return FinalAction(summary="Done", changes=[])
+                return actions_module.FinalAction(summary="Done", changes=[])
 
     repo_root = Path(".")
-    tools = RepoTools(repo_root=repo_root)
+    tools = tools_module.RepoTools(repo_root=repo_root)
     trace_file = tmp_path / "trace.jsonl"
-    trace = Trace(trace_file, run_id="run123")
+    trace = trace_module.Trace(trace_file, run_id="run123")
 
     llm = DummyLLM()
-    agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=AgentConfig())
+    agent = agent_module.RepoAgent(llm=llm, tools=tools, trace=trace, cfg=agent_module.AgentConfig())
 
     res = agent.run(goal="Lifecycle test", test_cmd=[])
     assert isinstance(res, dict)
