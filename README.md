@@ -26,11 +26,26 @@ A disciplined, loop-based repository fixer powered by LLMs. The model chooses on
 
 ---
 
+
+<figure id="fig-agent-workflow">
+  <img src="./blog_post/diagrams/agent_workflow.png" alt="Diagram of the workflow executed by the driver."/>
+  <figcaption>
+    Fig 1: A diagram of the workflow executed by the driver (RepoAgent.run)
+  </figcaption>
+</figure>
+
+---
+
+<figure id="fig-agent-main-execution">
+<img src="./blog_post" />
+</figure>
+
 ## Features
 
 - **Constrained Tools:** Only `list_files`, `read_file`, `grep`, `write_file`. No arbitrary shell, no network access. Tests are driver-controlled via `--test`.
 - **Typed Actions:** LLM must return `ToolCallAction` or `FinalAction`. Legacy dict-shaped actions are rejected.
 - **ReACT + CoT:** LLM produces typed actions with optional `thought` field; driver enforces one action per turn.
+
 - **Evidence Rule:** No final answer until at least one tool has been called—prevents hallucinated responses.
 - **Reflection System:** On test failures, tool errors, or loop detection, a second LLM call distills lessons (`notes`, `next_focus`, `risks`) that persist in history.
 - **Sandbox Isolation:** Runs against a temporary copy of the repo by default—safe to experiment without touching your original code.
