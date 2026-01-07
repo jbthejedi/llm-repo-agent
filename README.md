@@ -28,7 +28,7 @@ A disciplined, loop-based repository fixer powered by LLMs. The model chooses on
 
 
 <figure id="fig-agent-workflow">
-  <img src="./blog_post/diagrams/agent_workflow.png" alt="Diagram of the workflow executed by the driver."/>
+  <img src="./blog_post/diagrams/agent_workflow_v2.png" alt="Diagram of the workflow executed by the driver."/>
   <figcaption>
     Fig 1: A diagram of the workflow executed by the driver (RepoAgent.run)
   </figcaption>
