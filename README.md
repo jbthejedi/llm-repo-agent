@@ -74,6 +74,12 @@ export OPENAI_API_KEY="sk-..."
 
 # Optionally set a specific model (default: gpt-4.1-mini)
 export OPENAI_MODEL="gpt-4o"
+
+# Or use Together instead of OpenAI
+export TOGETHER_API_KEY="together-..."
+export TOGETHER_MODEL="Qwen/Qwen2.5-7B-Instruct-Turbo"
+# Optional override (default: https://api.together.xyz/v1)
+export TOGETHER_BASE_URL="https://api.together.xyz/v1"
 ```
 
 ---
@@ -218,8 +224,8 @@ poetry run repo-agent eval \
 
 **Step by step:**
 
-1. **Prompt Compilation:** System rules + goal + compact history + run summary
-2. **LLM Call:** Model returns exactly one typed action (`ToolCallAction` or `FinalAction`)
+1. **Conversation Start:** Seed multi-turn messages with system rules + goal
+2. **LLM Call:** Model returns exactly one typed action (`ToolCallAction` or `FinalAction`) using tool calls; tool results are appended as `tool` messages each turn
 3. **Action Parsing:** Strict validation; common mistakes coerced (e.g., tool name in `type` field)
 4. **Tool Execution:** `ActionController` dispatches to `RepoTools` with path safety checks
 5. **Test Execution:** If `write_file` and `--test-policy on_write`, driver runs tests
@@ -273,7 +279,7 @@ src/llm_repo_agent/
 
 All paths validated via `_safe_path()` to prevent directory traversal.
 
-**History & Summary** (`history.py`, `summary.py`): History is an append-only ledger. Summary derives a compact snapshot (files touched, last test result, files with errors) to keep prompts stable and bounded.
+**History & Summary** (`history.py`, `summary.py`): History is an append-only ledger used for loop detection, reflection context, and trace inspection. Summary derives a compact snapshot (files touched, last test result, files with errors) for reflection prompts and final output. Multi-turn prompts are maintained inside the LLM adapter, not compiled from history each turn.
 
 **Reflection System** (`reflection.py`, `reflection_controller.py`): When failures occur, a second LLM call generates:
 - `notes`: 1-5 actionable lessons from the failure
@@ -300,8 +306,11 @@ Reflections are gated (max 5 per run) and deduplicated to avoid noise.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | (required) | Your OpenAI API key |
-| `OPENAI_MODEL` | `gpt-4.1-mini` | Model to use for agent calls |
+| `OPENAI_API_KEY` | (required for OpenAI) | Your OpenAI API key |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | Model to use for OpenAI calls |
+| `TOGETHER_API_KEY` | (required for Together) | Your Together API key |
+| `TOGETHER_MODEL` | `Qwen/Qwen2.5-7B-Instruct-Turbo` | Model to use for Together calls |
+| `TOGETHER_BASE_URL` | `https://api.together.xyz/v1` | Together API base URL override |
 
 ### Agent Configuration
 
@@ -310,7 +319,7 @@ In code (`AgentConfig` in `agent.py`):
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `max_iters` | 20 | Maximum agent iterations |
-| `max_history` | 12 | Events to include in prompt |
+| `max_history` | 12 | Legacy (prompt-compilation era); currently unused in multi-turn chat |
 | `loop_tripwire` | 3 | Repeated actions before loop detection |
 | `test_policy` | `on_write` | When to run tests |
 
@@ -373,13 +382,16 @@ from llm_repo_agent.actions import ToolCallAction, FinalAction
 from llm_repo_agent.reflection import Reflection
 
 class MyLLMAdapter:
-    def next_action(self, messages: List[Dict]) -> ToolCallAction | FinalAction:
-        """Return a typed action from the LLM response."""
-        # Call your model, parse response, return typed action
+    def start_conversation(self, system_prompt: str, user_goal: str) -> None:
+        """Initialize multi-turn state before the first action."""
+        ...
+
+    def next_action(self, tool_result: str | None = None) -> ToolCallAction | FinalAction:
+        """Return a typed action; append tool results to the conversation."""
         ...
 
     def reflect(self, messages: List[Dict]) -> Reflection:
-        """Return a Reflection from the LLM response (JSON mode)."""
+        """Return a Reflection from a separate single-turn call (JSON mode)."""
         ...
 
     # Optional: set these for trace logging
