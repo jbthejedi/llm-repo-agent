@@ -92,9 +92,9 @@ Invariants enforced in this implementation:
 
 ---
 
-**LLM adapter (`LLM`, `OpenAIResponsesLLM`)** — turns prompts into typed Actions.
+**LLM adapter (`LLM`, `ChatCompletionsLLM`)** — turns prompts into typed Actions.
 
-The adapter sits between the LLM API and the agent. `OpenAIResponsesLLM` sends the prompt, then parses the response into Actions that the rest of the system knows how to execute.
+The adapter sits between the LLM API and the agent. `ChatCompletionsLLM` maintains multi-turn conversation state with proper assistant/tool message roles, then parses the response into Actions that the rest of the system knows how to execute.
 
 ---
 

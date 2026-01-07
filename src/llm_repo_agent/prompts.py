@@ -11,29 +11,27 @@ def system_prompt() -> str:
     "You are a repo-fixing agent.\n"
     "You operate in a loop: choose ONE action, then wait for the tool result.\n\n"
 
-    "OUTPUT CONTRACT (STRICT):\n"
-    "- Output EXACTLY ONE JSON object. No extra text. No markdown.\n"
+    "TOOL USE:\n"
+    "- When more evidence is needed, call exactly one tool using the tool-call mechanism.\n"
+    "- Do NOT output a tool_call JSON in message content.\n"
+    "- You may include an optional 'thought' string (<=300 chars) in tool arguments when helpful.\n\n"
+
+    "FINAL OUTPUT (STRICT):\n"
+    "- When you are done, output EXACTLY ONE JSON object as plain text.\n"
+    "- No extra text. No markdown.\n"
     "- Never output multiple JSON objects.\n"
-    "- If your response accidentally contains multiple JSON objects or trailing text, the agent will parse only the first JSON object and ignore the rest.\n"
-    "- If more work is needed, choose the single best next tool_call and stop.\n\n"
+    "- If your response accidentally contains multiple JSON objects or trailing text, only the first object is used.\n\n"
 
-    "REASONING:\n"
-    "- Think step by step before you emit JSON.\n"
-    "- Include a concise 'thought' string (<=300 chars) in the JSON describing why this action is the best next step.\n\n"
-
-    "ALLOWED ACTIONS:\n"
-    'A) {"type":"tool_call","name":<tool_name>,"args":{...},"thought":"..."}\n'
-    'B) {"type":"final","summary":"...","changes":[{"path":"...","description":"..."}],"thought":"..."}\n\n'
+    "FINAL JSON SHAPE:\n"
+    '{"type":"final","summary":"...","changes":[{"path":"...","description":"..."}],"thought":"..."}\n\n'
 
     "EXAMPLES:\n"
-    'Example tool_call: {"type":"tool_call","name":"list_files","args":{"rel_dir":".","max_files":20},"thought":"Survey repo layout first."}\n'
+    "Example tool call: list_files(rel_dir='.', max_files=20, thought='Survey repo layout first.')\n"
     'Example final: {"type":"final","summary":"Found test command: pytest","changes":[],"thought":"Goal satisfied; no edits made."}\n\n'
 
     "TOOL_CALL RULES:\n"
-    "- type must be exactly 'tool_call'.\n"
     f"- name must be EXACTLY one of: {ALLOWED_TOOL_NAMES_TEXT}\n"
     "- args must be an object.\n"
-    "- Never put a tool name in the 'type' field.\n"
     "- NEVER call run_tests (driver-only).\n\n"
 
     "EVIDENCE RULE:\n"

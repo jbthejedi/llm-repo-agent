@@ -10,7 +10,13 @@ from llm_repo_agent.actions import ToolCallAction, FinalAction
 
 class DummyLLM:
     """LLM that writes a file then returns final."""
-    def next_action(self, messages):
+    def start_conversation(self, system_prompt, user_goal):
+        self._messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_goal},
+        ]
+
+    def next_action(self, tool_result=None):
         # First call: ask to write file
         if not hasattr(self, 'calls'):
             self.calls = 1

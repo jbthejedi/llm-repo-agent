@@ -11,7 +11,14 @@ def test_final_changes_fallback(tmp_path):
     class DummyLLM:
         def __init__(self):
             self.calls = 0
-        def next_action(self, messages):
+
+        def start_conversation(self, system_prompt, user_goal):
+            self._messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_goal},
+            ]
+
+        def next_action(self, tool_result=None):
             self.calls += 1
             if self.calls == 1:
                 return ToolCallAction(name="write_file", args={"rel_path": "foo.txt", "content": "x"})

@@ -9,7 +9,13 @@ from llm_repo_agent.trace import Trace
 def test_agent_rejects_raw_dict_action(tmp_path):
     # Dummy LLM that returns a raw dict (legacy behavior)
     class DummyLLM:
-        def next_action(self, messages):
+        def start_conversation(self, system_prompt, user_goal):
+            self._messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_goal},
+            ]
+
+        def next_action(self, tool_result=None):
             return {"type": "tool_call", "name": "list_files", "args": {"rel_dir": ".", "max_files": 5}}
 
     repo_root = Path(".")

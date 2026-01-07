@@ -27,3 +27,8 @@ pytest = "^9.0.2"
 
 [project.scripts]
 repo-agent = "llm_repo_agent.main:main"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:Support for class-based `config` is deprecated:pydantic.warnings.PydanticDeprecatedSince20",
+]

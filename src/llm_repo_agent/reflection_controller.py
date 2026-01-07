@@ -91,4 +91,19 @@ class ReflectionController:
         dedup_window=self.cfg.reflection_dedup_window,
     )
     self.trace.log("reflection", ReflectionPayload(t=t, reflection=reflection.to_dict()))
+    self._add_reflection_note_to_message(reflection)
     self._progress(f"[reflect] iteration={t} notes={reflection.notes} next_focus={reflection.next_focus} risks={reflection.risks}")
+
+  def _add_reflection_note_to_message(self, reflection) -> None:
+    if not hasattr(self.llm, "add_driver_note"):
+      return
+    lines: List[str] = []
+    for note in reflection.notes or []:
+      lines.append(f"- {note}")
+    if reflection.next_focus:
+      lines.append(f"Next focus: {reflection.next_focus}")
+    if reflection.risks:
+      lines.append("Risks: " + "; ".join(reflection.risks))
+    note_text = "\n".join(lines).strip()
+    if note_text:
+      self.llm.add_driver_note(note_text)

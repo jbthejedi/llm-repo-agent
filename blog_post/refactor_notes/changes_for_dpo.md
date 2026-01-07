@@ -1,4 +1,14 @@
-## 1) Repo-level RAG
+## 1) New LLM Adapter
+
+Before being able to do DPO finetuning, we need a DPO-finetuneable LLM. We can't do that with our current GPT adapter. We need to add one for Together AI
+
+Steps:
+- Create Together AI api key
+- Implement New Together AI adapter
+- Select an LLM from Together that's cheap but also powerful enough to solve QuixBugs fixes in the default number of iterations for the driver
+
+
+## 1.1) Repo-level RAG
 
 **Summary:** Add a retrieval subsystem (chunk + index + retrieve) and expose it as a new tool `search_repo`, logging retrieval traces so we can evaluate retrieval separately from generation.
 
@@ -33,7 +43,7 @@
 
 ---
 
-## 2) Workspace sandbox
+~~## 2) Workspace sandbox~~
 
 **Summary:** Run each attempt in an isolated working copy (git worktree / temp copy) so rollouts, patching, and tests are safe and reproducible.
 
@@ -55,7 +65,7 @@
 
 ---
 
-## 3) Eval harness
+~~## 3) Eval harness~~
 
 **Summary:** Add a suite runner that executes tasks, scores them (tests pass/fail), and emits a report + traces so you can measure progress across models and versions.
 

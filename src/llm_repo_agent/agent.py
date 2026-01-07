@@ -81,6 +81,12 @@ class RepoAgent:
     """
     history = History()
     controller = ActionController(self.tools, self.trace)
+
+    last_tool_result: str | None = None
+    self.llm.start_conversation(
+      system_prompt=self.prompt.system(),
+      user_goal=f"GOAL:\n{goal}",
+    )
     def _run_and_record_tests(iter_label: str):
       test_res_local = self.tools.run_tests(test_cmd)
       output_snippet_local = test_res_local.output[:12000] if test_res_local.output else ""
@@ -114,7 +120,6 @@ class RepoAgent:
     for t in iterator:
       self._p("")
       self._p(f"[iter {t}] ------------------------------")
-      compact_history = history.to_prompt_list(self.cfg.max_history)
       loop_triggered = False
       if history.detect_loop(self.cfg.loop_tripwire):
         note = "Loop detected: change approach, inspect different evidence, then replan."
@@ -124,16 +129,6 @@ class RepoAgent:
         loop_triggered = True
         self._p(f"[loop] iteration={t} tripwire triggered; adding note")
 
-      ##############################
-      # CRAFT PROMPT
-      ##############################
-      summary = summarize_history(history, run_id=self.trace.run_id)
-      messages = self.prompt.compile_prompt(
-          goal=goal,
-          state=summary.to_dict(),
-          history=compact_history,
-      )
-
       # Emit run_start at the beginning of the run (only once)
       if t == 0:
         self.trace.log("run_start", RunStartPayload(run_id=self.trace.run_id, goal=goal))
@@ -142,10 +137,20 @@ class RepoAgent:
       ##############################
       # SEND REQUEST TO AGENT
       ##############################
-      self.trace.log("llm_request", LLMRequestPayload(t=t, messages=messages))
+      base_messages = getattr(self.llm, "_messages", None)
+      request_messages = list(base_messages) if isinstance(base_messages, list) else []
+      if last_tool_result is not None:
+        tool_call_id = getattr(self.llm, "_last_tool_call_id", None)
+        if tool_call_id:
+          request_messages.append({
+              "role": "tool",
+              "tool_call_id": tool_call_id,
+              "content": last_tool_result,
+          })
+      self.trace.log("llm_request", LLMRequestPayload(t=t, messages=request_messages))
       # Ask LLM for next action (now returns a typed Action or raises ActionParseError)
       try:
-        action = self.llm.next_action(messages)
+        action = self.llm.next_action(last_tool_result)
       except ActionParseError as e:
         # Adapter failed to return a typed Action — log and surface as runtime error.
         self.trace.log("llm_parse_error", LLMParseErrorPayload(t=t, error=str(e), raw=getattr(self.llm, "_last_raw", None)),)
@@ -194,8 +199,8 @@ class RepoAgent:
           latest_observation = test_event.to_dict()
           tests_run_for_final = True
 
-        if not history.has_any_observation():  # HARD GATE: no final before evidence
-          parsed_action = ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 200})
+        # if not history.has_any_observation():  # HARD GATE: no final before evidence
+        #   parsed_action = ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 200})
 
         summary = summarize_history(history, run_id=self.trace.run_id)
         final_obj = parsed_action.to_dict()
@@ -229,6 +234,9 @@ class RepoAgent:
       self._p(f"[tool] iteration={t} {parsed_action.name} ok={obs_event.observation.ok} output={str(obs_event.observation.output[:160]).strip()}...")
       latest_observation = obs_event.to_dict()
 
+      # Capture tool result for next iteration
+      last_tool_result = obs_event.observation.output
+
       ################################
       # RUNS TESTS IF COMMANDED
       ################################
@@ -236,6 +244,9 @@ class RepoAgent:
       if self.cfg.test_policy == "on_write" and parsed_action.name == "write_file" and test_cmd:
         test_res, test_event = _run_and_record_tests(t)
         latest_observation = test_event.to_dict()
+        test_status = "PASS" if test_res.ok else "FAIL"
+        test_snippet = (test_res.output or "")[:2000]
+        last_tool_result = f"{last_tool_result}\n\n[TESTS {test_status}]\n{test_snippet}"
 
       ##############################
       # REFLECTION CONTROLLER

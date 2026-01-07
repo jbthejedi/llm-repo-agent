@@ -11,7 +11,13 @@ import llm_repo_agent.actions as actions_module
 def test_agent_logs_trailing_json(tmp_path):
     # Dummy LLM that sets _last_trailing and returns a final object
     class DummyLLM:
-        def next_action(self, messages):
+        def start_conversation(self, system_prompt, user_goal):
+            self._messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_goal},
+            ]
+
+        def next_action(self, tool_result=None):
             self._last_trailing = '{"type":"final","summary":"second"}'
             return actions_module.FinalAction(summary="first", changes=[])
 
