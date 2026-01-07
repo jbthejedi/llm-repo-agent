@@ -11,7 +11,13 @@ def test_run_start_and_end_and_history(tmp_path):
     class DummyLLM:
         def __init__(self):
             self.calls = 0
-        def next_action(self, messages):
+        def start_conversation(self, system_prompt, user_goal):
+            self._messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_goal},
+            ]
+
+        def next_action(self, tool_result=None):
             self.calls += 1
             if self.calls == 1:
                 return actions_module.ToolCallAction(name="list_files", args={"rel_dir": ".", "max_files": 10})

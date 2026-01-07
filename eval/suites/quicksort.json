@@ -1,0 +1,20 @@
+{
+  "name": "example_suite",
+  "description": "Example evaluation suite for testing the eval harness",
+  "defaults": {
+    "test_cmd": "python -m pytest -q"
+  },
+  "tasks": [
+    {
+      "task_id": "fix_quicksort",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the quicksort implementation in python_programs/quicksort.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_quicksort.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "sorting",
+        "expected_files": ["python_programs/quicksort.py"]
+      }
+    }
+  ]
+}

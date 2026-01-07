@@ -65,6 +65,12 @@ TOOL_DEFINITIONS: Sequence[ToolDefinition] = (
 
 
 TOOL_NAMES = {t.name for t in TOOL_DEFINITIONS if not t.driver_only}
+TOOL_ARG_NAMES: Dict[str, List[str]] = {
+    t.name: [arg.name for arg in t.args] for t in TOOL_DEFINITIONS if not t.driver_only
+}
+TOOL_REQUIRED_ARGS: Dict[str, List[str]] = {
+    t.name: [arg.name for arg in t.args if arg.required] for t in TOOL_DEFINITIONS if not t.driver_only
+}
 ALLOWED_TOOL_NAMES_TEXT = ", ".join(sorted(TOOL_NAMES))
 
 
@@ -73,7 +79,8 @@ def _json_schema_type(arg_type: str) -> str:
   return arg_type
 
 
-def build_openai_tools(defs: Sequence[ToolDefinition] = TOOL_DEFINITIONS) -> List[Dict[str, Any]]:
+def build_chat_completion_tools(defs: Sequence[ToolDefinition] = TOOL_DEFINITIONS) -> List[Dict[str, Any]]:
+  """OpenAI-compatible chat-completions tool schema (function nested)."""
   tools: List[Dict[str, Any]] = []
   for tool in defs:
     if tool.driver_only:
@@ -81,18 +88,19 @@ def build_openai_tools(defs: Sequence[ToolDefinition] = TOOL_DEFINITIONS) -> Lis
     properties: Dict[str, Any] = {
         arg.name: {"type": _json_schema_type(arg.type), "description": arg.description} for arg in tool.args
     }
-    # Optional thought channel for the model to explain the step (not required).
     properties["thought"] = {"type": "string"}
     required = [arg.name for arg in tool.args if arg.required]
     tools.append({
         "type": "function",
-        "name": tool.name,
-        "description": tool.description,
-        "parameters": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": properties,
-            "required": required,
+        "function": {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": properties,
+                "required": required,
+            },
         },
     })
   return tools
@@ -114,5 +122,5 @@ def build_prompt_tool_spec(defs: Sequence[ToolDefinition] = TOOL_DEFINITIONS) ->
   return spec
 
 
-OPENAI_TOOLS = build_openai_tools()
+CHAT_COMPLETIONS_TOOLS = build_chat_completion_tools()
 PROMPT_TOOL_SPEC = build_prompt_tool_spec()

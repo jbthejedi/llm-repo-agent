@@ -122,6 +122,9 @@ poetry run repo-agent run \
   --repo <path>           # Path to target repository
   --goal <string>         # What you want the agent to do
   --test <command>        # Test command (e.g., "python -m pytest -q")
+  --llm-provider <name>   # openai | together (default: openai)
+  --model <model>         # Override model for the provider
+  --together-api-key <k>  # Together API key override (optional)
   --trace <path>          # JSONL trace file (default: runs/trace.jsonl)
   --test-policy <policy>  # on_write | on_final | never (default: on_write)
   --sandbox / --no-sandbox  # Run in sandbox (default: enabled)
@@ -146,6 +149,8 @@ poetry run repo-agent eval \
   --test-policy <policy>  # on_write | on_final | never
   --max-iters <n>         # Max agent iterations per task (default: 20)
   --model <model>         # Override OPENAI_MODEL env var
+  --llm-provider <name>   # openai | together (default: openai)
+  --together-api-key <k>  # Together API key override (optional)
   --quiet                 # Suppress per-task progress output
 ```
 
@@ -234,7 +239,7 @@ src/llm_repo_agent/
 ├── tools.py                # RepoTools (list_files, read_file, grep, write_file)
 ├── controller.py           # ActionController (dispatches actions to tools)
 ├── prompts.py              # System/user prompt construction
-├── llm.py                  # OpenAIResponsesLLM adapter
+├── llm.py                  # ChatCompletionsLLM adapter (unified multi-turn for all providers)
 ├── history.py              # Append-only event ledger
 ├── summary.py              # RunSummary (compact state for prompts)
 ├── trace.py                # JSONL trace logging
@@ -477,3 +482,11 @@ MIT
 Justin Barry ([@justinbarry](https://github.com/justinbarry))
 
 Blog post: [Deterministic LLM Agent](https://justinbarry.io/blog/deterministic-llm-agent)
+
+### Common run commands
+poetry run repo-agent eval \
+  --suite eval/suites/my_suite.json \
+  --trace-dir runs/my_eval_2 \
+  --report runs/my_eval_2/report.json \
+  --llm-provider openai \
+  --model gpt-4.1-mini

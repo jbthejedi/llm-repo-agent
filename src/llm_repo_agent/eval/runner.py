@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -12,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 from .tasks import TaskSpec, EvalSuite
 
 from llm_repo_agent.agent import RepoAgent, AgentConfig
-from llm_repo_agent.llm import LLM, OpenAIResponsesLLM
+from llm_repo_agent.llm import LLM, LLMFactory, LLMConfig
 from llm_repo_agent.tools import RepoTools
 from llm_repo_agent.trace import Trace
 from llm_repo_agent.sandbox import materialize_repo_sandbox, cleanup_sandbox, Sandbox
@@ -73,6 +72,8 @@ class EvalConfig:
         test_policy: When to run tests (on_write, on_final, never).
         max_iters: Maximum agent iterations per task.
         model: Model identifier to use.
+        llm_provider: Provider backend ("openai" or "together").
+        together_api_key: Optional Together API key override.
         progress: Whether to show progress output.
     """
 
@@ -82,6 +83,8 @@ class EvalConfig:
   test_policy: str = "on_write"
   max_iters: int = 20
   model: Optional[str] = None
+  llm_provider: str = "openai"
+  together_api_key: Optional[str] = None
   progress: bool = True
 
 
@@ -98,15 +101,18 @@ class EvalRunner:
         Args:
             cfg: Evaluation configuration.
             llm_factory: Optional factory function to create LLM instances.
-                         If not provided, uses OpenAIResponsesLLM with env config.
+                         If not provided, uses the configured provider via LLMFactory.
         """
     self.cfg = cfg or EvalConfig()
     self.llm_factory = llm_factory or self._default_llm_factory
     self.results: List[TaskResult] = []
 
   def _default_llm_factory(self) -> LLM:
-    model = self.cfg.model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    return OpenAIResponsesLLM(model=model)
+    return LLMFactory.build(LLMConfig(
+        provider=self.cfg.llm_provider,
+        model=self.cfg.model,
+        together_api_key=self.cfg.together_api_key,
+    ))
 
   def run_task(self, task: TaskSpec) -> TaskResult:
     """Run a single evaluation task and return the result."""
@@ -132,6 +138,10 @@ class EvalRunner:
       # Setup tools and trace
       tools = RepoTools(repo_root=tools_root)
       trace_path = self.cfg.trace_dir / f"{task.task_id}_{run_id}.jsonl"
+      llm = self.llm_factory()
+      model_name = getattr(llm, "model", None) or (self.cfg.model or "unknown")
+      if self.cfg.progress:
+        print(f"[llm] provider={self.cfg.llm_provider} model={model_name}")
       trace = Trace(
           trace_path,
           run_id=run_id,
@@ -140,12 +150,12 @@ class EvalRunner:
               "repo": str(repo_root),
               "goal": task.goal,
               "test_cmd": task.test_cmd,
-              "model": self.cfg.model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+              "model": model_name,
+              "provider": self.cfg.llm_provider,
           },
       )
 
       # Create agent
-      llm = self.llm_factory()
       agent_cfg = AgentConfig(
           max_iters=self.cfg.max_iters,
           test_policy=self.cfg.test_policy,

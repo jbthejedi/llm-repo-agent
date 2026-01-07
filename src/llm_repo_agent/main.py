@@ -31,6 +31,15 @@ def cmd_run(args):
   tools = tools_module.RepoTools(repo_root=tools_root)
 
   run_id = uuid.uuid4().hex[:10]
+  llm_cfg = llm_module.LLMConfig(
+      provider=args.llm_provider,
+      model=args.model,
+      together_api_key=args.together_api_key,
+  )
+  llm = llm_module.LLMFactory.build(llm_cfg)
+  model_name = getattr(llm, "model", None) or (args.model or "unknown")
+  print(f"[llm] provider={args.llm_provider} model={model_name}")
+
   trace = trace_module.Trace(
       Path(args.trace),
       run_id=run_id,
@@ -38,11 +47,10 @@ def cmd_run(args):
           "repo": str(repo_root),
           "goal": args.goal,
           "test_cmd": args.test,
-          "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+          "model": model_name,
+          "provider": args.llm_provider,
       },
   )
-
-  llm = llm_module.OpenAIResponsesLLM(model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
   agent = agent_module.RepoAgent(llm=llm, tools=tools, trace=trace, cfg=agent_module.AgentConfig(test_policy=args.test_policy))
 
   test_cmd = args.test.split() if args.test.strip() else []
@@ -71,6 +79,8 @@ def cmd_eval(args):
       test_policy=args.test_policy,
       max_iters=args.max_iters,
       model=args.model,
+      llm_provider=args.llm_provider,
+      together_api_key=args.together_api_key,
       progress=not args.quiet,
   )
 
@@ -89,7 +99,8 @@ def cmd_eval(args):
         config={
             "test_policy": args.test_policy,
             "max_iters": args.max_iters,
-            "model": args.model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            "model": args.model or "auto",
+            "provider": args.llm_provider,
             "sandbox": args.sandbox,
         },
     )
@@ -139,6 +150,15 @@ def main():
   run_parser.add_argument("--goal", type=str, required=True, help="What you want the agent to do")
   run_parser.add_argument("--trace", type=str, default="runs/trace.jsonl")
   run_parser.add_argument("--test", type=str, default="", help='Test command, e.g. "python -m pytest -q"')
+  run_parser.add_argument(
+      "--llm-provider",
+      type=str,
+      choices=["openai", "together"],
+      default="openai",
+      help="LLM provider backend (default: openai).",
+  )
+  run_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides provider default).")
+  run_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   run_parser.add_argument("--sandbox", dest="sandbox", action=argparse.BooleanOptionalAction, default=True,
                           help="Run against a temporary sandbox copy of the repo (default: enabled).")
   run_parser.add_argument("--sandbox-dir", type=str, default=None, help="Optional explicit sandbox directory to use.")
@@ -171,6 +191,14 @@ def main():
   )
   eval_parser.add_argument("--max-iters", type=int, default=20, help="Max agent iterations per task")
   eval_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides OPENAI_MODEL env)")
+  eval_parser.add_argument(
+      "--llm-provider",
+      type=str,
+      choices=["openai", "together"],
+      default="openai",
+      help="LLM provider backend (default: openai).",
+  )
+  eval_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   eval_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
   eval_parser.set_defaults(func=cmd_eval)
 
