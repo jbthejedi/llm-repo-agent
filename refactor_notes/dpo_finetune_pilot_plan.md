@@ -43,39 +43,45 @@ repo-agent prefs \
 
 ## Pilot Dataset Format (JSONL)
 
-Each line is a preference pair with chat-completions message content.
+Each line is a preference pair using Together's required format.
 
 ```
 {
-  "prompt": [
-    {"role": "system", "content": "<system prompt>"},
-    {"role": "user", "content": "GOAL:\nFix quicksort so tests pass."}
+  "input": {
+    "messages": [
+      {"role": "system", "content": "<system prompt>"},
+      {"role": "user", "content": "GOAL:\nFix quicksort so tests pass."}
+    ]
+  },
+  "preferred_output": [
+    {"role": "assistant", "content": "{\"type\":\"final\",\"summary\":\"...\",\"changes\":[...],\"test_result\":{...}}"}
   ],
-  "chosen": {
-    "role": "assistant",
-    "content": "{\"type\":\"final\",\"summary\":\"...\",\"changes\":[...],\"test_result\":{...}}"
-  },
-  "rejected": {
-    "role": "assistant",
-    "content": "{\"type\":\"final\",\"summary\":\"...\",\"changes\":[...],\"test_result\":{...}}"
-  },
-  "meta": {
-    "task_id": "fix_quicksort",
-    "suite": "my_suite",
-    "model": "Qwen/Qwen2.5-72B-Instruct-Turbo",
-    "temperature": 0.7,
-    "seed": 42,
-    "scores": {"chosen": 1.0, "rejected": 0.0},
-    "tests_ok": {"chosen": true, "rejected": false},
-    "trace_ids": {"chosen": "run_abc", "rejected": "run_xyz"},
-    "rollout_counts": {"total": 4}
-  }
+  "non_preferred_output": [
+    {"role": "assistant", "content": "{\"type\":\"final\",\"summary\":\"...\",\"changes\":[...],\"test_result\":{...}}"}
+  ]
+}
+```
+
+We'll also write a separate metadata file (`dpo_dataset_meta.jsonl`) for debugging:
+
+```
+{
+  "task_id": "fix_quicksort",
+  "suite": "my_suite",
+  "model": "Qwen/Qwen2.5-72B-Instruct-Turbo",
+  "temperature": 0.7,
+  "seed": 42,
+  "scores": {"preferred": 1.0, "non_preferred": 0.0},
+  "tests_ok": {"preferred": true, "non_preferred": false},
+  "trace_ids": {"preferred": "run_abc", "non_preferred": "run_xyz"},
+  "rollout_counts": {"total": 4}
 }
 ```
 
 Notes:
 - For the pilot, we only store the final assistant response per rollout.
-- Tool-call transcripts can be added later for a richer dataset.
+- Tool-call transcripts would require multi-turn SFT or custom reward model.
+- Together format requires exactly one assistant message per output array.
 
 ## Scoring and Pair Selection
 
@@ -138,40 +144,39 @@ Run eval twice with the existing CLI:
 
 Compare pass rate, average steps, and tool calls to demonstrate improvement.
 
-## Risks and Open Questions
+## Confirmed Items
 
-- Confirm Together DPO format and required fields for preference data.
-- Confirm whether the pilot should include tool-call transcripts or final-only.
-- Ensure deterministic behavior with `--seed` is supported by the model/provider.
+### ✅ Together DPO format
 
-## Additional Considerations
+Together uses different field names than standard DPO datasets:
+- `input.messages` (not `prompt`)
+- `preferred_output` (not `chosen`)
+- `non_preferred_output` (not `rejected`)
+- Both outputs must be arrays with exactly one assistant message
+
+Source: https://docs.together.ai/docs/preference-fine-tuning
+
+### ✅ Seed parameter supported
+
+Together's Chat Completions API supports `seed` parameter for reproducibility.
+Use `seed + rollout_index` to get deterministic but varied rollouts.
+
+Source: https://docs.together.ai/reference/chat-completions-1
+
+### ✅ Final-only for pilot
+
+Together's DPO format expects a single assistant message per output, which aligns
+with our "final response only" approach. Tool-call transcripts would require
+multi-turn SFT or a custom reward model—out of scope for the pilot.
+
+## Open Questions
 
 ### Edge case: No contrast in rollouts
 
-What happens when all N rollouts either pass or all fail? There's no meaningful
-preference signal in that case. Options:
-- Skip tasks where `score_chosen == score_rejected` (no pair emitted).
+What happens when all N rollouts either pass or all fail? Options:
+- Skip tasks where `score_preferred == score_non_preferred` (no pair emitted).
 - Log these as "no contrast" in a separate file for analysis.
 - Require a `--min-gap` threshold to filter pairs where best/worst are too similar.
-
-### Seed variation across rollouts
-
-If `--seed 42` applies identically to all rollouts, outputs may be identical
-(depending on provider behavior). Consider:
-- `seed + rollout_index` for reproducible variation.
-- Random seed per rollout (less reproducible but guaranteed diversity).
-
-### Together format verification
-
-The `chosen`/`rejected` structure looks standard, but Together may expect
-different field names (e.g., `chosen_messages` vs `chosen`). Verify against
-their docs before implementing.
-
-### Assistant content encoding
-
-The plan shows JSON-stringified content in `chosen.content`. Confirm this is
-what Together expects—most DPO setups use natural language strings rather than
-serialized JSON.
 
 ### Target sample size
 
