@@ -1,154 +1,110 @@
-iter1
-request
-{role:system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
+# Notes v1 — Chat Completions Migration
 
-response
--> append
-{role:system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-{role: assistant, tool_calls: [{type: function: {name: listfiles, args: [...]}}]} <- tool_call
+This narrative captures the reasoning behind the switch to multi-turn Chat
+Completions, how tool calls are threaded across iterations, and why reflection
+notes are injected the way they are.
 
-Dispatch action
-{role: system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-{role: assistant, tool_calls: [{id: <tool_call_id>, type: function: {name: listfiles, args: [...]}}]} <- tool call gets appended in `llm.ChatCompletionsLLM.next_action` *after* chat.completions.create is called
-{role: tool, tool_call_id: <tool_call_id>, result(content): <result_of_read/grep>} <- tool result gets appended in `llm.ChatCompletionsLLM.next_action` *before* chat.completions.create is called
+## The Multi-turn Loop (What Actually Happens Each Iteration)
 
-When is reflection run in this new chat completions?
-Reflection is a separate llm call that adds a note about the triggered event regarding what to do next to fix whatever triggered the event.
-we need to make reflection optional for ablations
+The agent no longer compiles a fresh prompt every turn. Instead, the LLM adapter
+maintains a single conversation transcript (`_messages`) and appends to it as
+the run progresses.
 
-iter0
-{role: system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-iter1
-{role: assistant...}
-{role: tool...}
-iter2
-{role: assistant...}
-{role: tool...}
-iter3
-{role: assistant...}
-{role: tool...}
+High-level flow:
 
----
+1) Start the conversation with a system message and the user goal.
+2) Call `chat.completions.create(...)` with tool schemas enabled.
+3) If the model returns a tool call:
+   - Append the assistant message that contains the tool call.
+   - Execute the tool.
+4) On the *next* iteration, append the tool result as a `tool` message.
+5) Ask the model for the next action.
 
-### Question
+That yields a transcript that grows like this:
 
-iter0
-{role: system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-iter1
-{role: assistant...}
-{role: tool...}
-iter2
-{role: assistant...}
-{role: tool...}
-iter3
-{role: assistant...}
-{role: tool...}
+```
+{role: system, content: "youre an agent in a loop"}
+{role: user, content: "GOAL: fix quicksort"}
+{role: assistant, tool_calls: [...]}   <-- appended after API call
+{role: tool, tool_call_id: "...", content: "..."}  <-- appended before next API call
+{role: assistant, tool_calls: [...]}
+{role: tool, tool_call_id: "...", content: "..."}
+...
+```
 
-Above, I'm showing how the multi-turn message grows per iteration. 
+Important detail: the assistant tool call is appended *after* the API response,
+and the tool result is appended *before* the next API call. This keeps the
+conversation consistent and lets the model see exactly what it requested and
+what it got back.
 
-How do the LLMs know, in the multi-turn message above, the order of the tool calls? So basically, it's system -> user -> assistant (which action?) -> tool (result of action) -> assistant -> tool
+## How the Model Knows the Order of Tool Calls
 
-Does the ChatCompletion API say it's chronological ordering from oldest -> most recent?
+Chat Completions expects the `messages` array in chronological order (oldest to
+newest). The model reads the list top-to-bottom like a transcript. The ordering
+is implicit in the list itself.
 
-### Response
+Two rules matter:
 
-Yes—Chat Completions expects the messages list in chronological order (oldest → newest). The model treats it as a conversation transcript. That’s why each new request appends the latest assistant tool call followed by the tool result, then asks for the next assistant step.
+- Tool results appear after the assistant message that requested them.
+- `tool_call_id` ties the tool result to its originating tool call.
 
-The ordering is “implicit”: it just reads the list top‑to‑bottom. The tool_call_id links a specific tool result to the assistant tool call that created it, but the sequence still comes from the list order. If you re‑ordered the list, you’d confuse the model.
+If you reorder messages or insert a tool result before its tool call, the model
+will get confused.
 
-So the contract is:
+## Reflection in a Multi-turn World
 
-messages are chronological
-tool results must appear after the assistant message that requested them
-tool_call_id ties those two together when there are multiple tool calls
+Reflection is not part of the main chat loop. It is a separate LLM call that
+produces a concise driver note (what went wrong, next focus, risks).
 
-### Example of multi-turn message with reflection
+We inject that reflection into the main conversation as a **system message**:
 
-{role: system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-{role: assistant...}
-{role: tool...}
-{role: assistant...}
-{role: tool...}
-{role: assistant...}
-{role: tool...}
-{role: system...} <- driver note
+```
+{role: system, content: "DRIVER NOTE:\n- ..."}
+```
 
+Why system?
 
-### Question
-=== example of a multi-turn message with reflection =====
+- It has the highest steering weight.
+- It acts like an instruction from the driver scaffold rather than a normal
+  observation.
+- It reduces the chance the model ignores the feedback.
 
-{role: system, content: youre an agent in a loop}
-{role: user, content: <goal> -> fix quicksort}
-{role: assistant...}
-{role: tool...}
-{role: assistant...}
-{role: tool...}
-{role: assistant...}
-{role: tool...}
-{role: system...} <- driver note from reflection
+Multiple system messages are valid. Chat Completions reads them in order, and
+later system messages typically override or refine earlier ones. That’s why the
+reflection note is appended at the end of the transcript.
 
-==== your task ====
-Question
-Why is the result of reflection added as a system message? Also, the example above is an example of a multi-turn message after multiple iterations, where the last append was the result of a reflection. Can the LLM distinguish between multiple system messages (role: system)?
+Reflection should also be **optional** for ablations and experimentation so we
+can measure its impact.
 
+## OpenAI-Compatible Client (Mental Model)
 
-### Answer
+We use the OpenAI Python SDK (`from openai import OpenAI`), but point it at
+Together by setting `base_url="https://api.together.xyz/v1"`.
 
-Reflection is injected as a system message because we want it to act like a high‑priority instruction from the driver (the “scaffold”), not just another observation. System messages carry the strongest steering weight in most chat APIs, so they’re the safest way to make the model actually use the reflection rather than ignoring it.
+That means:
 
-Can the model handle multiple system messages?
-Yes. Chat Completions supports multiple system messages; the model reads them in order. The later system messages typically override or refine earlier ones. That’s why the reflection note goes after the tool result—it’s effectively a corrective instruction appended at the end.
+- The **client library** is OpenAI’s.
+- The **API** we’re calling is Together’s.
+- The **interface** is OpenAI’s chat-completions schema (messages + tools +
+  tool_calls), which Together implements.
 
-If you want a softer effect, we can inject reflection as:
+This lets a single `ChatCompletionsLLM` adapter work across providers.
 
-role: user (lower priority, like an external hint), or
-role: assistant (self‑reflection, weakest steering).
-I picked system because it’s the most reliable way to prevent repeated mistakes, but you can change the role if you prefer gentler behavior.
+## Model Coverage and Caveats
 
+- Qwen, Llama, Mixtral: usable through Together’s OpenAI-compatible endpoint.
+- Tool calling quality varies by model (Qwen is stronger than many others).
+- Grok is not on Together; it requires xAI’s API. If xAI supports an
+  OpenAI-compatible endpoint, the same adapter could work with a different
+  `base_url`.
 
----
+OpenAI-compatible only guarantees request/response *shape*, not feature quality
+or tool-calling reliability.
 
-Wait, i think something is off about my understanding of the OpenAI compatible client. What is that client? Is it using the openai module? So it's developed by openai but works with together? So chat completions is a client made by openai that's meant to work with any model that can adhere to that interface? I see we're just passing together_base_url to the chat completions client
+## Open Questions / Next Checks
 
-
-Yeah, it’s a little confusing. Here’s the clean mental model:
-
-We are using the openai Python SDK (from openai import OpenAI) — that’s OpenAI’s client library.
-That SDK can talk to any OpenAI‑compatible API if you point it at a different base URL.
-That’s why we pass base_url="https://api.together.xyz/v1" — the client sends the same request shape (chat‑completions + tools) to Together instead of OpenAI.
-Together implements the OpenAI chat‑completions schema, so it works.
-So:
-
-The client library is OpenAI’s.
-The API it calls is Together’s (because of base_url).
-The interface (messages + tools + tool_calls) is OpenAI’s schema, which many providers adopt.
-That’s why a single Chat Completions adapter can work across providers without using their native SDKs.
-
-So I can use openai's chat completions API with any llm together offers?
-
-
-Yes—with a caveat. You can use the OpenAI chat‑completions interface (via the OpenAI SDK + Together base URL) with any Together model that supports that interface. Most of their chat/instruct models do. Some models may not support tool calling or may behave poorly with it, but the request format is the same.
-
-So:
-
-Any Together model that is “chat/instruct” → works with chat‑completions.
-Tool calling support varies by model; if a model ignores tools, you’ll see empty/incorrect tool calls.
-If you want, I can point you to a simple rule of thumb for which Together models handle tools best based on your current usage.
-
-what about llama/mixtral/grok?
-
-
-Short answer:
-
-Llama + Mixtral: yes, on Together you can use them via the OpenAI‑compatible chat completions endpoint (pick their instruct/chat model IDs). Basic chat works; tool calling support is model‑dependent and often weaker than Qwen.
-Grok: not on Together. You’d need xAI’s API. If xAI exposes an OpenAI‑compatible chat‑completions endpoint, you can point the same OpenAI client at that base URL; otherwise you’ll need a separate adaptor.
-Caveat: “OpenAI‑compatible” only guarantees the request/response shape. Features like tool calling/JSON mode/logprobs vary by model/provider.
-
----
-
+- Confirm Together’s required DPO dataset fields and naming.
+- Decide whether DPO pilot data should be final-only or include tool-call
+  transcripts.
+- Verify whether Together’s `seed` field provides deterministic outputs in
+  practice.
