@@ -1,4 +1,4 @@
-## 1) New LLM Adapter
+~~## 1) New LLM Adapter~~
 
 Before being able to do DPO finetuning, we need a DPO-finetuneable LLM. We can't do that with our current GPT adapter. We need to add one for Together AI
 
@@ -8,7 +8,7 @@ Steps:
 - Select an LLM from Together that's cheap but also powerful enough to solve QuixBugs fixes in the default number of iterations for the driver
 
 
-## 1.1) Repo-level RAG
+## 1.1) Repo-level RAG <- We're gonna add this in later bc it's not necessary to get DPO working
 
 **Summary:** Add a retrieval subsystem (chunk + index + retrieve) and expose it as a new tool `search_repo`, logging retrieval traces so we can evaluate retrieval separately from generation.
 
