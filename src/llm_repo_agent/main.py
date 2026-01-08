@@ -114,6 +114,7 @@ def cmd_prefs(args):
   cfg = prefs_rollouts.PrefsConfig(
       trace_dir=Path(args.trace_dir),
       out_path=Path(args.out),
+      write_mode=args.data_write_mode,
       rollouts=args.rollouts,
       sandbox=args.sandbox,
       keep_sandbox=args.keep_sandbox,
@@ -232,6 +233,13 @@ def main():
   prefs_parser.add_argument("--rollouts", type=int, default=4, help="Number of rollouts per task (default: 4)")
   prefs_parser.add_argument("--out", type=str, default="runs/prefs/dpo_dataset.jsonl",
                             help="Output path for preference JSONL file")
+  prefs_parser.add_argument(
+      "--data-write-mode",
+      type=str,
+      choices=["overwrite", "append"],
+      default="overwrite",
+      help="Whether to overwrite or append to output files (default: overwrite).",
+  )
   prefs_parser.add_argument("--trace-dir", type=str, default="runs/prefs", help="Directory for trace files")
   prefs_parser.add_argument(
       "--llm-provider",

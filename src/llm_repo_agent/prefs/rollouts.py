@@ -34,6 +34,7 @@ class PrefsConfig:
         trace_dir: Directory to store trace files.
         out_path: Path for output JSONL file.
         meta_path: Path for metadata JSONL file.
+        write_mode: Output write mode ("overwrite" or "append").
         rollouts: Number of rollouts per task.
         sandbox: Whether to run in sandbox mode.
         keep_sandbox: Whether to keep sandbox after run.
@@ -49,6 +50,7 @@ class PrefsConfig:
     trace_dir: Path = field(default_factory=lambda: Path("runs/prefs"))
     out_path: Path = field(default_factory=lambda: Path("runs/prefs/dpo_dataset.jsonl"))
     meta_path: Optional[Path] = None  # Defaults to out_path with _meta suffix
+    write_mode: str = "overwrite"  # "overwrite" | "append"
     rollouts: int = 4
     sandbox: bool = True
     keep_sandbox: bool = False
@@ -62,6 +64,8 @@ class PrefsConfig:
     progress: bool = True
 
     def __post_init__(self):
+        if self.write_mode not in {"overwrite", "append"}:
+            raise ValueError(f"Invalid write_mode: {self.write_mode!r}. Use 'overwrite' or 'append'.")
         if self.meta_path is None:
             stem = self.out_path.stem
             self.meta_path = self.out_path.parent / f"{stem}_meta.jsonl"
@@ -240,22 +244,41 @@ class PrefsRunner:
         # Ensure output directories exist
         self.cfg.out_path.parent.mkdir(parents=True, exist_ok=True)
 
+        mode = "a" if self.cfg.write_mode == "append" else "w"
+
+        def _ensure_newline(path: Path) -> None:
+            if self.cfg.write_mode != "append":
+                return
+            if not path.exists():
+                return
+            if path.stat().st_size == 0:
+                return
+            with path.open("rb") as f:
+                f.seek(-1, 2)
+                if f.read(1) != b"\n":
+                    with path.open("a", encoding="utf-8") as f_text:
+                        f_text.write("\n")
+
         # Write preference pairs
-        with self.cfg.out_path.open("w", encoding="utf-8") as f:
+        _ensure_newline(self.cfg.out_path)
+        with self.cfg.out_path.open(mode, encoding="utf-8") as f:
             for pair in self.pairs:
                 f.write(pair.to_jsonl() + "\n")
 
         if self.cfg.progress:
-            print(f"[prefs] Wrote {len(self.pairs)} preference pairs to: {self.cfg.out_path}")
+            verb = "Appended" if self.cfg.write_mode == "append" else "Wrote"
+            print(f"[prefs] {verb} {len(self.pairs)} preference pairs to: {self.cfg.out_path}")
 
         # Write metadata
         if self.cfg.meta_path:
-            with self.cfg.meta_path.open("w", encoding="utf-8") as f:
+            _ensure_newline(self.cfg.meta_path)
+            with self.cfg.meta_path.open(mode, encoding="utf-8") as f:
                 for meta in self.metas:
                     f.write(meta.to_jsonl() + "\n")
 
             if self.cfg.progress:
-                print(f"[prefs] Wrote metadata to: {self.cfg.meta_path}")
+                verb = "Appended" if self.cfg.write_mode == "append" else "Wrote"
+                print(f"[prefs] {verb} metadata to: {self.cfg.meta_path}")
 
 
 def run_rollouts(
