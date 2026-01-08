@@ -58,6 +58,7 @@ class ChatCompletionsLLM:
     self._last_tool_call_id: str | None = None
     self._tool_call_counter: int = 0
     self._last_raw: Any = None
+    self._last_usage: Dict[str, int] | None = None
     self._last_trailing: str | None = None
     self._last_parse_error: bool = False
 
@@ -107,6 +108,32 @@ class ChatCompletionsLLM:
     """Generate a unique tool call ID."""
     self._tool_call_counter += 1
     return f"call_{self._tool_call_counter}"
+
+  def _set_last_usage(self, resp: Any) -> None:
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+      self._last_usage = None
+      return
+    if isinstance(usage, dict):
+      prompt_tokens = usage.get("prompt_tokens")
+      completion_tokens = usage.get("completion_tokens")
+      total_tokens = usage.get("total_tokens")
+    else:
+      prompt_tokens = getattr(usage, "prompt_tokens", None)
+      completion_tokens = getattr(usage, "completion_tokens", None)
+      total_tokens = getattr(usage, "total_tokens", None)
+
+    if prompt_tokens is None or completion_tokens is None:
+      self._last_usage = None
+      return
+    if total_tokens is None:
+      total_tokens = prompt_tokens + completion_tokens
+
+    self._last_usage = {
+      "prompt_tokens": int(prompt_tokens),
+      "completion_tokens": int(completion_tokens),
+      "total_tokens": int(total_tokens),
+    }
 
   def _decode_final(self, text: str) -> Dict[str, Any]:
     """Decode final JSON response, handling trailing text."""
@@ -172,6 +199,7 @@ class ChatCompletionsLLM:
     if self.seed is not None:
       api_kwargs["seed"] = self.seed
     resp = self.client.chat.completions.create(**api_kwargs)
+    self._set_last_usage(resp)
 
     choices = getattr(resp, "choices", []) or []
     if not choices:
@@ -256,6 +284,7 @@ class ChatCompletionsLLM:
       temperature=self.temperature,
       max_tokens=self.max_output_tokens,
     )
+    self._set_last_usage(resp)
     choices = getattr(resp, "choices", []) or []
     if not choices:
       raise RuntimeError("Empty reflection response.")

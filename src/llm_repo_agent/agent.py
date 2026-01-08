@@ -15,6 +15,7 @@ from .trace import (
     LLMActionPayload,
     LLMParseErrorPayload,
     LLMRequestPayload,
+    LLMUsagePayload,
     LLMTrailingTextPayload,
     RunEndPayload,
     RunStartPayload,
@@ -74,6 +75,28 @@ class RepoAgent:
   def _p(self, msg: str) -> None:
     if self._progress:
       tqdm.write(msg)
+
+  def _log_llm_usage(self, t: int, phase: str = "action") -> None:
+    usage = getattr(self.llm, "_last_usage", None)
+    if not usage:
+      return
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens")
+    if prompt_tokens is None or completion_tokens is None:
+      return
+    if total_tokens is None:
+      total_tokens = prompt_tokens + completion_tokens
+    self.trace.log(
+        "llm_usage",
+        LLMUsagePayload(
+            t=t,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            phase=phase,
+        ),
+    )
 
   def run(self, goal: str, test_cmd: List[str]) -> Dict[str, Any]:
     """
@@ -151,7 +174,9 @@ class RepoAgent:
       # Ask LLM for next action (now returns a typed Action or raises ActionParseError)
       try:
         action = self.llm.next_action(last_tool_result)
+        self._log_llm_usage(t, phase="action")
       except ActionParseError as e:
+        self._log_llm_usage(t, phase="action")
         # Adapter failed to return a typed Action — log and surface as runtime error.
         self.trace.log("llm_parse_error", LLMParseErrorPayload(t=t, error=str(e), raw=getattr(self.llm, "_last_raw", None)),)
         raise RuntimeError("LLM adapter failed to produce a valid typed Action") from e

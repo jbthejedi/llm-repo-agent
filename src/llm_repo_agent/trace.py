@@ -41,6 +41,15 @@ class LLMRequestPayload(TracePayload):
 
 
 @dataclass
+class LLMUsagePayload(TracePayload):
+  t: int
+  prompt_tokens: int
+  completion_tokens: int
+  total_tokens: int
+  phase: str = "action"
+
+
+@dataclass
 class LLMParseErrorPayload(TracePayload):
   t: int
   error: str

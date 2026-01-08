@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import json
 import os
 import uuid
 from pathlib import Path
@@ -14,6 +15,7 @@ import llm_repo_agent.eval.tasks as eval_tasks
 import llm_repo_agent.eval.runner as eval_runner
 import llm_repo_agent.eval.metrics as eval_metrics
 import llm_repo_agent.eval.report as eval_report
+import llm_repo_agent.estimate_cost as estimate_cost
 import llm_repo_agent.prefs.rollouts as prefs_rollouts
 from dotenv import load_dotenv
 
@@ -129,6 +131,41 @@ def cmd_prefs(args):
   )
 
   prefs_rollouts.run_rollouts(Path(args.suite), cfg)
+
+
+def cmd_estimate_cost(args):
+  """Estimate preference data generation cost from trace logs."""
+  trace_dir = Path(args.trace_dir)
+  dataset_path = Path(args.dataset)
+
+  usage = estimate_cost.collect_usage_stats(trace_dir)
+  if usage.calls == 0:
+    print(f"[estimate-cost] No llm_usage events found in: {trace_dir}")
+    return
+
+  if not dataset_path.exists():
+    raise FileNotFoundError(f"Dataset not found: {dataset_path}")
+
+  pair_count = estimate_cost.count_pairs(dataset_path)
+  target_pairs = args.target_pairs if args.target_pairs is not None else pair_count
+
+  result = estimate_cost.estimate_cost(
+      usage=usage,
+      pair_count=pair_count,
+      price_in=args.price_in,
+      price_out=args.price_out,
+      target_pairs=target_pairs,
+  )
+
+  if args.json:
+    print(json.dumps(result, indent=2))
+    return
+
+  print(f"[estimate-cost] calls={result['calls']} pairs={result['pairs']} files_scanned={result['files_scanned']}")
+  print(f"[estimate-cost] avg_prompt_tokens={result['avg_prompt_tokens']:.1f} avg_completion_tokens={result['avg_completion_tokens']:.1f}")
+  print(f"[estimate-cost] cost_per_call=${result['cost_per_call']:.6f}")
+  print(f"[estimate-cost] calls_per_pair={result['calls_per_pair']:.2f} cost_per_pair=${result['cost_per_pair']:.6f}")
+  print(f"[estimate-cost] target_pairs={result['target_pairs']} scaled_cost=${result['scaled_cost']:.2f}")
 
 
 def _print_final_output(out):
@@ -266,6 +303,18 @@ def main():
   prefs_parser.add_argument("--keep-sandbox", action="store_true", help="Keep sandbox directories after runs.")
   prefs_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
   prefs_parser.set_defaults(func=cmd_prefs)
+
+  # -------------------------------------------------------------------------
+  # estimate-cost: Estimate preference data generation cost
+  # -------------------------------------------------------------------------
+  cost_parser = subparsers.add_parser("estimate-cost", help="Estimate preference data generation cost")
+  cost_parser.add_argument("--trace-dir", type=str, required=True, help="Directory containing trace JSONL files")
+  cost_parser.add_argument("--dataset", type=str, required=True, help="Preference dataset JSONL file")
+  cost_parser.add_argument("--price-in", type=float, required=True, help="Input token price per 1M tokens (USD)")
+  cost_parser.add_argument("--price-out", type=float, required=True, help="Output token price per 1M tokens (USD)")
+  cost_parser.add_argument("--target-pairs", type=int, default=None, help="Target number of pairs to scale to")
+  cost_parser.add_argument("--json", action="store_true", help="Print JSON output")
+  cost_parser.set_defaults(func=cmd_estimate_cost)
 
   # -------------------------------------------------------------------------
   # Parse and dispatch

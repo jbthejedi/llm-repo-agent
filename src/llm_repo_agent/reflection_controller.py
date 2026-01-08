@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from .history import DriverNoteEvent, ReflectionEvent, ObservationEvent
 from .reflection import ReflectionParseError, compile_reflection_prompt
 from .summary import summarize_history
-from .trace import DriverNotePayload, ReflectionPayload, ReflectionRequestPayload
+from .trace import DriverNotePayload, ReflectionPayload, ReflectionRequestPayload, LLMUsagePayload
 
 
 @dataclass
@@ -67,9 +67,32 @@ class ReflectionController:
     )
     self.trace.log("reflection_request", ReflectionRequestPayload(t=t, messages=ref_messages))
     self._progress(f"[reflect] iteration={t} triggered; building reflection on latest observation")
+    def _log_usage() -> None:
+      usage = getattr(self.llm, "_last_usage", None)
+      if not usage:
+        return
+      prompt_tokens = usage.get("prompt_tokens")
+      completion_tokens = usage.get("completion_tokens")
+      total_tokens = usage.get("total_tokens")
+      if prompt_tokens is None or completion_tokens is None:
+        return
+      if total_tokens is None:
+        total_tokens = prompt_tokens + completion_tokens
+      self.trace.log(
+          "llm_usage",
+          LLMUsagePayload(
+              t=t,
+              prompt_tokens=prompt_tokens,
+              completion_tokens=completion_tokens,
+              total_tokens=total_tokens,
+              phase="reflection",
+          ),
+      )
     try:
       reflection = self.llm.reflect(ref_messages)
+      _log_usage()
     except ReflectionParseError as e:
+      _log_usage()
       note = f"Reflection parse failed: {e}"
       note_event = DriverNoteEvent(note=note)
       self.history.append_driver_note(note_event)
@@ -77,6 +100,7 @@ class ReflectionController:
       self._progress(f"[reflect] iteration={t} parse failed: {e}")
       return
     except Exception as e:
+      _log_usage()
       note = f"Reflection failed: {e}"
       note_event = DriverNoteEvent(note=note)
       self.history.append_driver_note(note_event)

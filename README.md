@@ -17,6 +17,7 @@ A disciplined, loop-based repository fixer powered by LLMs. The model chooses on
   - [run](#run-single-task)
   - [eval](#eval-evaluation-suite)
   - [prefs](#prefs-dpo-preference-data)
+  - [estimate-cost](#estimate-cost-preference-data-cost)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
@@ -293,6 +294,27 @@ together fine-tuning create \
 
 ---
 
+### `estimate-cost`: Preference Data Cost
+
+Estimate average tokens per call and cost per preference pair using trace logs.
+This requires traces that include `llm_usage` events (newer runs).
+
+```bash
+poetry run repo-agent estimate-cost \
+  --trace-dir runs/prefs \
+  --dataset runs/prefs/dpo_dataset_pilot.jsonl \
+  --price-in 0.30 \
+  --price-out 0.30 \
+  --target-pairs 3000
+```
+
+**Outputs:**
+- Avg prompt/completion tokens per call
+- Cost per call and cost per preference pair
+- Scaled cost for your target pair count
+
+---
+
 ## How It Works
 
 ```
@@ -471,7 +493,7 @@ poetry run python -m llm_repo_agent.inspect_trace \
   --pretty-only-prompt
 ```
 
-**Event kinds:** `run_start`, `run_end`, `llm_request`, `llm_action`, `llm_parse_error`, `llm_trailing_text`, `tool_result`, `tests`, `reflection`, `reflection_request`, `driver_note`, `final`
+**Event kinds:** `run_start`, `run_end`, `llm_request`, `llm_usage`, `llm_action`, `llm_parse_error`, `llm_trailing_text`, `tool_result`, `tests`, `reflection`, `reflection_request`, `driver_note`, `final`
 
 ---
 
