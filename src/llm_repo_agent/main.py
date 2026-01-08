@@ -14,6 +14,7 @@ import llm_repo_agent.eval.tasks as eval_tasks
 import llm_repo_agent.eval.runner as eval_runner
 import llm_repo_agent.eval.metrics as eval_metrics
 import llm_repo_agent.eval.report as eval_report
+import llm_repo_agent.prefs.rollouts as prefs_rollouts
 from dotenv import load_dotenv
 
 
@@ -106,6 +107,27 @@ def cmd_eval(args):
     )
     eval_report.write_report(report, Path(args.report))
     print(f"\n[eval] Report written to: {args.report}")
+
+
+def cmd_prefs(args):
+  """Generate preference data for DPO finetuning."""
+  cfg = prefs_rollouts.PrefsConfig(
+      trace_dir=Path(args.trace_dir),
+      out_path=Path(args.out),
+      rollouts=args.rollouts,
+      sandbox=args.sandbox,
+      keep_sandbox=args.keep_sandbox,
+      test_policy=args.test_policy,
+      max_iters=args.max_iters,
+      model=args.model,
+      llm_provider=args.llm_provider,
+      together_api_key=args.together_api_key,
+      temperature=args.temperature,
+      base_seed=args.seed,
+      progress=not args.quiet,
+  )
+
+  prefs_rollouts.run_rollouts(Path(args.suite), cfg)
 
 
 def _print_final_output(out):
@@ -201,6 +223,41 @@ def main():
   eval_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   eval_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
   eval_parser.set_defaults(func=cmd_eval)
+
+  # -------------------------------------------------------------------------
+  # prefs: Generate preference data for DPO finetuning
+  # -------------------------------------------------------------------------
+  prefs_parser = subparsers.add_parser("prefs", help="Generate preference data for DPO finetuning")
+  prefs_parser.add_argument("--suite", type=str, required=True, help="Path to suite JSON file")
+  prefs_parser.add_argument("--rollouts", type=int, default=4, help="Number of rollouts per task (default: 4)")
+  prefs_parser.add_argument("--out", type=str, default="runs/prefs/dpo_dataset.jsonl",
+                            help="Output path for preference JSONL file")
+  prefs_parser.add_argument("--trace-dir", type=str, default="runs/prefs", help="Directory for trace files")
+  prefs_parser.add_argument(
+      "--llm-provider",
+      type=str,
+      choices=["openai", "together"],
+      default="together",
+      help="LLM provider backend (default: together).",
+  )
+  prefs_parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-72B-Instruct-Turbo",
+                            help="Model to use (default: Qwen/Qwen2.5-72B-Instruct-Turbo)")
+  prefs_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
+  prefs_parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature (default: 0.7)")
+  prefs_parser.add_argument("--seed", type=int, default=42, help="Base seed for reproducibility (default: 42)")
+  prefs_parser.add_argument("--max-iters", type=int, default=20, help="Max agent iterations per task (default: 20)")
+  prefs_parser.add_argument(
+      "--test-policy",
+      type=str,
+      choices=["on_write", "on_final", "never"],
+      default="on_write",
+      help="When to run tests (default: on_write).",
+  )
+  prefs_parser.add_argument("--sandbox", dest="sandbox", action=argparse.BooleanOptionalAction, default=True,
+                            help="Run tasks in sandbox mode (default: enabled).")
+  prefs_parser.add_argument("--keep-sandbox", action="store_true", help="Keep sandbox directories after runs.")
+  prefs_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
+  prefs_parser.set_defaults(func=cmd_prefs)
 
   # -------------------------------------------------------------------------
   # Parse and dispatch

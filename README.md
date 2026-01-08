@@ -16,6 +16,7 @@ A disciplined, loop-based repository fixer powered by LLMs. The model chooses on
 - [Commands](#commands)
   - [run](#run-single-task)
   - [eval](#eval-evaluation-suite)
+  - [prefs](#prefs-dpo-preference-data)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
@@ -192,6 +193,104 @@ poetry run repo-agent eval \
 - Aggregate `report.json` with metrics (success rate, avg steps, duration)
 - Console summary with pass/fail breakdown by category
 
+### `prefs`: DPO Preference Data
+
+Generate preference data for Direct Preference Optimization (DPO) finetuning.
+
+**What is DPO?**
+
+Direct Preference Optimization is a technique for aligning language models to preferred behaviors without reward modeling. Instead of training a separate reward model, DPO directly optimizes the policy using pairs of (preferred, non-preferred) responses. This is particularly useful for:
+
+- **Improving task success rates:** Train the model to favor responses that lead to passing tests
+- **Reducing inefficiency:** Prefer rollouts that use fewer steps/tool calls
+- **Domain adaptation:** Finetune on your specific codebase patterns
+
+**How it works:**
+
+1. For each task in your suite, the agent runs N independent rollouts with varied seeds
+2. Each rollout is scored primarily by test pass/fail, with tie-breakers for efficiency
+3. The best and worst rollouts form a preference pair
+4. Output is formatted for Together's DPO training API
+
+```bash
+poetry run repo-agent prefs \
+  --suite <path>              # Path to suite JSON file
+  --rollouts <n>              # Number of rollouts per task (default: 4)
+  --out <path>                # Output JSONL file (default: runs/prefs/dpo_dataset.jsonl)
+  --trace-dir <path>          # Directory for trace files (default: runs/prefs)
+  --llm-provider <name>       # openai | together (default: together)
+  --model <model>             # Model to use (default: Qwen/Qwen2.5-72B-Instruct-Turbo)
+  --temperature <float>       # Sampling temperature (default: 0.7)
+  --seed <int>                # Base seed for reproducibility (default: 42)
+  --max-iters <n>             # Max agent iterations per task (default: 20)
+  --test-policy <policy>      # on_write | on_final | never (default: on_write)
+  --sandbox / --no-sandbox    # Run in sandbox (default: enabled)
+  --quiet                     # Suppress progress output
+```
+
+**Example:**
+
+```bash
+poetry run repo-agent prefs \
+  --suite eval/suites/my_suite.json \
+  --rollouts 4 \
+  --out runs/prefs/dpo_dataset.jsonl \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --temperature 0.7 \
+  --seed 42
+```
+
+**Output files:**
+
+1. `dpo_dataset.jsonl` - Preference pairs in Together's format:
+```json
+{
+  "input": {
+    "messages": [
+      {"role": "system", "content": "<system prompt>"},
+      {"role": "user", "content": "GOAL:\nFix quicksort..."}
+    ]
+  },
+  "preferred_output": [
+    {"role": "assistant", "content": "{\"type\":\"final\",...}"}
+  ],
+  "non_preferred_output": [
+    {"role": "assistant", "content": "{\"type\":\"final\",...}"}
+  ]
+}
+```
+
+2. `dpo_dataset_meta.jsonl` - Debugging metadata:
+```json
+{
+  "task_id": "fix_quicksort",
+  "suite": "my_suite",
+  "scores": {"preferred": 1.0, "non_preferred": 0.0},
+  "trace_ids": {"preferred": "run_abc", "non_preferred": "run_xyz"}
+}
+```
+
+**Scoring:**
+- Primary signal: Tests pass (1.0) or fail (0.0)
+- Tie-breakers: Fewer steps > fewer tool calls > fewer files touched
+- Tasks with no contrast (all pass or all fail) are skipped
+
+**Training with Together:**
+
+After generating preference data, upload to Together and start a DPO training job:
+
+```bash
+# Upload dataset
+together files upload runs/prefs/dpo_dataset.jsonl
+
+# Start DPO training (see Together docs for full options)
+together fine-tuning create \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --training-file <file_id> \
+  --training-type dpo
+```
+
 ---
 
 ## How It Works
@@ -254,11 +353,16 @@ src/llm_repo_agent/
 ├── reflection_controller.py # Reflection gating and invocation
 ├── tool_schema.py          # Tool specifications for prompts
 ├── inspect_trace.py        # Trace inspection CLI utility
-└── eval/                   # Evaluation harness
-    ├── tasks.py            # TaskSpec, EvalSuite, load_suite()
-    ├── runner.py           # EvalRunner, TaskResult
-    ├── metrics.py          # compute_metrics(), EvalMetrics
-    └── report.py           # Report generation and comparison
+├── eval/                   # Evaluation harness
+│   ├── tasks.py            # TaskSpec, EvalSuite, load_suite()
+│   ├── runner.py           # EvalRunner, TaskResult
+│   ├── metrics.py          # compute_metrics(), EvalMetrics
+│   └── report.py           # Report generation and comparison
+└── prefs/                  # DPO preference data generation
+    ├── rollouts.py         # PrefsRunner, run N rollouts per task
+    ├── score.py            # RolloutScore, scoring logic
+    ├── pairs.py            # Pair selection (best/worst)
+    └── schema.py           # Together JSONL format helpers
 ```
 
 ### Key Components
@@ -477,8 +581,8 @@ Future enhancements planned (see `blog_post/refactor_notes/changes_for_dpo.md`):
 
 - **Repo-level RAG:** Semantic search via `search_repo` tool with chunking and embeddings
 - **Evaluation Harness:** *(Implemented)* Suite runner with metrics and reporting
-- **Preference Data Generation:** Multiple rollouts per task, scored by test outcomes
-- **DPO Training Pipeline:** Generate training data from (chosen, rejected) pairs
+- **Preference Data Generation:** *(Implemented)* Multiple rollouts per task, scored by test outcomes
+- **DPO Training Pipeline:** *(Implemented)* Generate training data in Together's format for DPO finetuning
 - **Local Model Support:** `HFLocalLLM` adapter for fine-tuned models
 
 ---

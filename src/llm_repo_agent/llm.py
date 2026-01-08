@@ -50,6 +50,7 @@ class ChatCompletionsLLM:
   max_output_tokens: int = 600
   base_url: str | None = None  # None = OpenAI default, or Together/other URL
   api_key: str | None = None
+  seed: int | None = None  # Seed for reproducibility
 
   def __post_init__(self) -> None:
     # Conversation state
@@ -160,14 +161,17 @@ class ChatCompletionsLLM:
     ##################################
     ########## CALL THE API
     ##################################
-    resp = self.client.chat.completions.create(
-      model=self.model,
-      messages=self._messages,
-      tools=CHAT_COMPLETIONS_TOOLS,
-      tool_choice="auto",
-      temperature=self.temperature,
-      max_tokens=self.max_output_tokens,
-    )
+    api_kwargs: Dict[str, Any] = {
+      "model": self.model,
+      "messages": self._messages,
+      "tools": CHAT_COMPLETIONS_TOOLS,
+      "tool_choice": "auto",
+      "temperature": self.temperature,
+      "max_tokens": self.max_output_tokens,
+    }
+    if self.seed is not None:
+      api_kwargs["seed"] = self.seed
+    resp = self.client.chat.completions.create(**api_kwargs)
 
     choices = getattr(resp, "choices", []) or []
     if not choices:
@@ -280,6 +284,7 @@ class LLMConfig:
   max_output_tokens: int = 600
   together_api_key: str | None = None
   together_base_url: str | None = None
+  seed: int | None = None  # Seed for reproducibility
 
 
 class LLMFactory:
@@ -306,6 +311,7 @@ def _build_openai(cfg: LLMConfig) -> LLM:
       max_output_tokens=cfg.max_output_tokens,
       base_url=None,  # Use OpenAI default
       api_key=None,   # Use default from env
+      seed=cfg.seed,
   )
 
 
@@ -318,6 +324,7 @@ def _build_together(cfg: LLMConfig) -> LLM:
       max_output_tokens=cfg.max_output_tokens,
       base_url=base_url,
       api_key=cfg.together_api_key,
+      seed=cfg.seed,
   )
 
 
