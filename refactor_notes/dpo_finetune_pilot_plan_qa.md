@@ -271,8 +271,21 @@ multi-turn SFT or a custom reward model—out of scope for the pilot.
 
 What happens when all N rollouts either pass or all fail? Options:
 - Skip tasks where `score_preferred == score_non_preferred` (no pair emitted).
+<question>
+Q:  So if all N rollouts are either pass/fail, then that is the case where `score_preferred == score_non_preferred`? And in that case, we should skip all the rollouts? So we'll just have to generate more rollouts? How is this a solution?
+</question><br>
+<answer>
+A: Yes, that is the tie case. Skipping avoids low-signal pairs that can hurt training. You can get contrast by adding rollouts (or increasing temperature), widening the task set, or using tie-breakers (steps/tool calls) to pick a preferred vs non-preferred rollout even when tests tie.
+</answer><br>
+
 - Log these as "no contrast" in a separate file for analysis.
 - Require a `--min-gap` threshold to filter pairs where best/worst are too similar.
+<question>
+Q: Oh, I see, so using some other criteria (fewer iterations/tool-calls) as the signal? So how would that work when finetuning? We have to change the reward from pass/fail-1.0/0.0 so some other criteria?
+</question><br>
+<answer>
+A: You do not change the DPO loss. You only decide which rollout is preferred when building pairs. Tests pass/fail remains primary; if tied, pick the rollout with fewer steps/tool calls as preferred. The trainer still only sees preferred vs non-preferred examples.
+</answer>
 
 ### Target sample size
 
@@ -285,4 +298,17 @@ Even a rough target (50 pairs? 200?) would help scope the pilot:
 Back-of-envelope estimate before running:
 - ~X tokens per rollout (depends on task complexity and max-iters).
 - N rollouts × M tasks = total API calls.
+<info>
+max_iters = 20
+<info>
+<question>
+Q: I guess how many preference pairs do we need for the pilot? Well, this is less about seeing if we can improve metrics via dpo and more about seeing if we can just run the data through dpo and say "yes, this works as expected", or iron out any issues before we commit. So I don't think we need to worry about the cost estimate for now, right? I mean we can generate 10-20 rollouts or something. But we should know this after we verify we can get a clean dpo finetune run.
+</question><br>
+<answer>
+A: For a pipeline check, a small set is enough. Target ~10–30 preference pairs total (e.g., 5–10 tasks with 2–4 rollouts). That validates dataset formatting, upload, and a full DPO run without worrying about cost. Once it works end-to-end, scale up.
+</answer>
+
 - Together pricing for Qwen model.
+<!-- <question>
+Q: Can you verify this? What will it cost to dpo finetune Qwen? How do they charge? Also, what does it cost to call a finetuned model?
+</question><br> -->

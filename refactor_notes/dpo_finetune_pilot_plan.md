@@ -38,6 +38,7 @@ repo-agent prefs \
 - For each task in the suite, run N rollouts (independent attempts).
 - Score each rollout using tests as the primary signal.
 - Select the best and worst rollout to form a preference pair.
+- If tests tie, use tie-breakers to pick a preferred vs non-preferred rollout, or mark as no-contrast and increase rollouts/temperature.
 - Write one JSONL line per task into `--out`.
 - Store trace IDs in metadata for debugging.
 
@@ -82,6 +83,7 @@ Notes:
 - For the pilot, we only store the final assistant response per rollout.
 - Tool-call transcripts would require multi-turn SFT or custom reward model.
 - Together format requires exactly one assistant message per output array.
+- If we later do SFT to improve tool calls, serialize tool calls/results inside user/assistant text to fit Together's format.
 
 ## Scoring and Pair Selection
 
@@ -98,6 +100,8 @@ Tie-breakers (applied in order if needed):
 Pairing:
 - Best score becomes `chosen`
 - Worst score becomes `rejected`
+
+Note: We do not change the DPO loss; we only decide which rollout is preferred when building pairs.
 
 ## Implementation Plan (Code Changes)
 
@@ -169,6 +173,10 @@ Together's DPO format expects a single assistant message per output, which align
 with our "final response only" approach. Tool-call transcripts would require
 multi-turn SFT or a custom reward model—out of scope for the pilot.
 
+## Pilot sizing (recommended)
+
+For an end-to-end validation run, aim for ~10-30 preference pairs total (for example, 5-10 tasks with 2-4 rollouts each). This is enough to verify data formatting, upload, and training without worrying about cost.
+
 ## Open Questions
 
 ### Edge case: No contrast in rollouts
@@ -178,15 +186,9 @@ What happens when all N rollouts either pass or all fail? Options:
 - Log these as "no contrast" in a separate file for analysis.
 - Require a `--min-gap` threshold to filter pairs where best/worst are too similar.
 
-### Target sample size
-
-Even a rough target (50 pairs? 200?) would help scope the pilot:
-- Informs how many suite tasks to include.
-- Helps estimate cost (N rollouts × M tasks × tokens-per-rollout).
-
 ### Cost estimate
 
 Back-of-envelope estimate before running:
 - ~X tokens per rollout (depends on task complexity and max-iters).
 - N rollouts × M tasks = total API calls.
-- Together pricing for Qwen model.
+- Together pricing for Qwen model (final price reported after tokenization).
