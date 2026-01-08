@@ -232,9 +232,9 @@ poetry run repo-agent prefs \
 
 ```bash
 poetry run repo-agent prefs \
-  --suite eval/suites/my_suite.json \
+  --suite eval/suites/pref_data_gen_pilot_1.json \
   --rollouts 4 \
-  --out runs/prefs/dpo_dataset.jsonl \
+  --out runs/prefs/dpo_dataset_pilot.jsonl \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
   --temperature 0.7 \
