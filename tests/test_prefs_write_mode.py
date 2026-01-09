@@ -118,6 +118,7 @@ def test_cmd_prefs_passes_write_mode(monkeypatch, tmp_path):
         out=str(tmp_path / "out.jsonl"),
         data_write_mode="append",
         rollouts=2,
+        max_workers=4,
         sandbox=True,
         keep_sandbox=False,
         test_policy="on_write",

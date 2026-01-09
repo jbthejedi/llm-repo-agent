@@ -51,12 +51,13 @@ poetry run repo-agent eval \
  poetry run repo-agent prefs \
   --suite eval/suites/pref_data_gen_pilot_1.json \
   --rollouts 4 \
-  --out runs/prefs_cost_estimate_pilot/dpo_dataset_cost_est.jsonl \
-  --trace-dir runs/prefs_cost_estimate_pilot \
+  --out runs/test_multithreading/dpo_dataset_cost_est.jsonl \
+  --trace-dir runs/test_multithreading \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
   --temperature 0.7 \
-  --seed 42
+  --seed 42 \
+  --max-workers 4
 
 # Estimate costs
 # Qwen-72

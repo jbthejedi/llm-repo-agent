@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -27,6 +30,16 @@ class RolloutResult:
 
 
 @dataclass
+class RolloutWorkItem:
+    """A single unit of work for parallel execution."""
+    task: TaskSpec
+    task_idx: int  # Index in suite.tasks (for grouping when task_ids aren't unique)
+    suite_name: str
+    seed: int
+    rollout_idx: int  # For progress reporting
+
+
+@dataclass
 class PrefsConfig:
     """Configuration for preference data generation.
 
@@ -36,6 +49,7 @@ class PrefsConfig:
         meta_path: Path for metadata JSONL file.
         write_mode: Output write mode ("overwrite" or "append").
         rollouts: Number of rollouts per task.
+        max_workers: Number of parallel threads (0 = sequential).
         sandbox: Whether to run in sandbox mode.
         keep_sandbox: Whether to keep sandbox after run.
         test_policy: When to run tests.
@@ -52,6 +66,7 @@ class PrefsConfig:
     meta_path: Optional[Path] = None  # Defaults to out_path with _meta suffix
     write_mode: str = "overwrite"  # "overwrite" | "append"
     rollouts: int = 4
+    max_workers: int = 4  # Number of parallel threads (0 = sequential)
     sandbox: bool = True
     keep_sandbox: bool = False
     test_policy: str = "on_write"
@@ -71,6 +86,66 @@ class PrefsConfig:
             self.meta_path = self.out_path.parent / f"{stem}_meta.jsonl"
 
 
+def run_single_rollout(item: RolloutWorkItem, cfg: PrefsConfig) -> RolloutResult:
+    """Execute a single rollout. Thread-safe, no shared mutable state.
+
+    Args:
+        item: Work item containing task and seed.
+        cfg: Configuration (read-only).
+
+    Returns:
+        RolloutResult with task_result, score, final_content, seed.
+    """
+    # Create eval config for this rollout
+    eval_cfg = EvalConfig(
+        trace_dir=cfg.trace_dir,
+        sandbox=cfg.sandbox,
+        keep_sandbox=cfg.keep_sandbox,
+        test_policy=cfg.test_policy,
+        max_iters=cfg.max_iters,
+        model=cfg.model,
+        llm_provider=cfg.llm_provider,
+        together_api_key=cfg.together_api_key,
+        progress=False,  # Disable per-step progress in parallel mode
+    )
+
+    # Create LLM factory with seed
+    def llm_factory() -> LLM:
+        return LLMFactory.build(LLMConfig(
+            provider=cfg.llm_provider,
+            model=cfg.model,
+            together_api_key=cfg.together_api_key,
+            temperature=cfg.temperature,
+            seed=item.seed,
+        ))
+
+    # Run the task
+    runner = EvalRunner(cfg=eval_cfg, llm_factory=llm_factory)
+    task_result = runner.run_task(item.task)
+
+    # Score it
+    score = score_rollout(task_result)
+
+    # Build final content JSON
+    final_obj = {
+        "type": "final",
+        "summary": task_result.final_summary,
+        "changes": [{"path": p, "description": "Edited file"} for p in task_result.files_touched],
+    }
+    if task_result.success is not None:
+        final_obj["test_result"] = {
+            "ok": task_result.success,
+            "summary": task_result.test_output[:200] if task_result.test_output else "",
+        }
+
+    return RolloutResult(
+        task_result=task_result,
+        score=score,
+        final_content=json.dumps(final_obj),
+        seed=item.seed,
+    )
+
+
 class PrefsRunner:
     """Runs rollouts and generates preference pairs."""
 
@@ -79,6 +154,10 @@ class PrefsRunner:
         self.pairs: List[PreferencePair] = []
         self.metas: List[PreferenceMeta] = []
         self.no_contrast_tasks: List[str] = []
+        # Threading support
+        self._progress_lock = threading.Lock()
+        self._completed_count = 0
+        self._total_work_items = 0
 
     def _make_llm_factory(self, seed: int) -> Callable[[], LLM]:
         """Create an LLM factory with a specific seed."""
@@ -91,6 +170,19 @@ class PrefsRunner:
                 seed=seed,
             ))
         return factory
+
+    def _report_progress(self, item: RolloutWorkItem, result: RolloutResult) -> None:
+        """Thread-safe progress reporting."""
+        if not self.cfg.progress:
+            return
+        with self._progress_lock:
+            self._completed_count += 1
+            status = "PASS" if result.task_result.success else (
+                "FAIL" if result.task_result.success is False else "N/A"
+            )
+            print(f"[prefs] [{self._completed_count}/{self._total_work_items}] "
+                  f"{item.task.task_id} seed={item.seed}: {status} "
+                  f"(steps={result.task_result.steps})")
 
     def run_task_rollouts(self, task: TaskSpec, suite_name: str) -> Optional[tuple[PreferencePair, PreferenceMeta]]:
         """Run N rollouts for a single task and return preference pair if contrast exists.
@@ -206,8 +298,138 @@ class PrefsRunner:
 
         return pref_pair, meta
 
+    def _form_pair(
+        self,
+        task: TaskSpec,
+        suite_name: str,
+        rollout_results: List[RolloutResult]
+    ) -> Optional[tuple[PreferencePair, PreferenceMeta]]:
+        """Form a preference pair from rollout results."""
+        scores = [r.score for r in rollout_results]
+        pair_result = select_pair(scores)
+
+        if pair_result is None or not pair_result.has_contrast:
+            return None
+
+        preferred = rollout_results[pair_result.preferred_idx]
+        non_preferred = rollout_results[pair_result.non_preferred_idx]
+
+        sys_prompt = system_prompt()
+        user_goal = f"GOAL:\n{task.goal}"
+
+        pref_pair = format_together_jsonl(
+            system_prompt=sys_prompt,
+            user_goal=user_goal,
+            preferred_content=preferred.final_content,
+            non_preferred_content=non_preferred.final_content,
+        )
+
+        meta = PreferenceMeta(
+            task_id=task.task_id,
+            suite=suite_name,
+            model=self.cfg.model or "unknown",
+            temperature=self.cfg.temperature,
+            seed=self.cfg.base_seed,
+            scores={
+                "preferred": pair_result.preferred_score.primary,
+                "non_preferred": pair_result.non_preferred_score.primary,
+            },
+            tests_ok={
+                "preferred": preferred.task_result.success or False,
+                "non_preferred": non_preferred.task_result.success or False,
+            },
+            trace_ids={
+                "preferred": preferred.task_result.run_id,
+                "non_preferred": non_preferred.task_result.run_id,
+            },
+            rollout_counts={"total": self.cfg.rollouts},
+        )
+
+        return pref_pair, meta
+
+    def run_suite_parallel(self, suite: EvalSuite) -> None:
+        """Run all rollouts in parallel, then group and form pairs."""
+        self.pairs = []
+        self.metas = []
+        self.no_contrast_tasks = []
+
+        # Build flat list of all work items
+        work_items: List[RolloutWorkItem] = []
+        for task_idx, task in enumerate(suite.tasks):
+            for i in range(self.cfg.rollouts):
+                work_items.append(RolloutWorkItem(
+                    task=task,
+                    task_idx=task_idx,
+                    suite_name=suite.name,
+                    seed=self.cfg.base_seed + i,
+                    rollout_idx=i,
+                ))
+
+        self._total_work_items = len(work_items)
+        self._completed_count = 0
+
+        if self.cfg.progress:
+            print(f"[prefs] Starting {self._total_work_items} rollouts "
+                  f"({len(suite.tasks)} tasks × {self.cfg.rollouts} rollouts) "
+                  f"with {self.cfg.max_workers} workers")
+
+        # Execute all in parallel
+        # Use task_idx as key to handle duplicate task_ids in suite
+        results_by_task_idx: Dict[int, List[RolloutResult]] = defaultdict(list)
+
+        with ThreadPoolExecutor(max_workers=self.cfg.max_workers) as executor:
+            # Submit all work items
+            future_to_item = {
+                executor.submit(run_single_rollout, item, self.cfg): item
+                for item in work_items
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_item):
+                item = future_to_item[future]
+                try:
+                    result = future.result()
+                    results_by_task_idx[item.task_idx].append(result)
+                    self._report_progress(item, result)
+                except Exception as e:
+                    print(f"[prefs] ERROR: {item.task.task_id} seed={item.seed}: {e}")
+                    # Best-effort: log and continue, skip failed rollouts
+
+        # Process each task's results to form pairs
+        for task_idx, task in enumerate(suite.tasks):
+            task_results = results_by_task_idx.get(task_idx, [])
+            if len(task_results) < 2:
+                self.no_contrast_tasks.append(task.task_id)
+                continue
+
+            pair_result = self._form_pair(task, suite.name, task_results)
+            if pair_result:
+                pref_pair, meta = pair_result
+                self.pairs.append(pref_pair)
+                self.metas.append(meta)
+            else:
+                self.no_contrast_tasks.append(task.task_id)
+
+        # Print summary
+        if self.cfg.progress:
+            print(f"\n{'='*60}")
+            print(f"[prefs] Summary:")
+            print(f"[prefs] Total tasks: {len(suite.tasks)}")
+            print(f"[prefs] Preference pairs generated: {len(self.pairs)}")
+            print(f"[prefs] No-contrast tasks: {len(self.no_contrast_tasks)}")
+            if self.no_contrast_tasks:
+                print(f"[prefs] Skipped: {', '.join(self.no_contrast_tasks)}")
+            print(f"{'='*60}")
+
     def run_suite(self, suite: EvalSuite) -> None:
-        """Run all tasks in a suite and generate preference pairs.
+        """Run suite - parallel if max_workers > 0, else sequential."""
+        if self.cfg.max_workers > 0:
+            self.run_suite_parallel(suite)
+        else:
+            self._run_suite_sequential(suite)
+
+    def _run_suite_sequential(self, suite: EvalSuite) -> None:
+        """Run all tasks in a suite sequentially and generate preference pairs.
 
         Args:
             suite: The evaluation suite to process.

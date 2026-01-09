@@ -118,6 +118,7 @@ def cmd_prefs(args):
       out_path=Path(args.out),
       write_mode=args.data_write_mode,
       rollouts=args.rollouts,
+      max_workers=args.max_workers,
       sandbox=args.sandbox,
       keep_sandbox=args.keep_sandbox,
       test_policy=args.test_policy,
@@ -268,6 +269,8 @@ def main():
   prefs_parser = subparsers.add_parser("prefs", help="Generate preference data for DPO finetuning")
   prefs_parser.add_argument("--suite", type=str, required=True, help="Path to suite JSON file")
   prefs_parser.add_argument("--rollouts", type=int, default=4, help="Number of rollouts per task (default: 4)")
+  prefs_parser.add_argument("--max-workers", type=int, default=4,
+                            help="Max parallel rollouts (0 for sequential, default: 4)")
   prefs_parser.add_argument("--out", type=str, default="runs/prefs/dpo_dataset.jsonl",
                             help="Output path for preference JSONL file")
   prefs_parser.add_argument(
