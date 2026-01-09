@@ -1,0 +1,229 @@
+{
+  "name": "pref_cost_estimate_suite",
+  "description": "Preference data cost estimate suite (20 QuixBugs tasks)",
+  "defaults": {
+    "test_cmd": "python -m pytest -q"
+  },
+  "tasks": [
+    {
+      "task_id": "fix_quicksort",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the quicksort implementation in python_programs/quicksort.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_quicksort.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "sorting",
+        "expected_files": ["python_programs/quicksort.py"]
+      }
+    },
+    {
+      "task_id": "fix_mergesort",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the mergesort implementation in python_programs/mergesort.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_mergesort.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "sorting",
+        "expected_files": ["python_programs/mergesort.py"]
+      }
+    },
+    {
+      "task_id": "fix_gcd",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the gcd implementation in python_programs/gcd.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_gcd.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/gcd.py"]
+      }
+    },
+    {
+      "task_id": "fix_breadth_first_search",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the breadth_first_search implementation in python_programs/breadth_first_search.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_breadth_first_search.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/breadth_first_search.py"]
+      }
+    },
+    {
+      "task_id": "fix_depth_first_search",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the depth_first_search implementation in python_programs/depth_first_search.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_depth_first_search.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/depth_first_search.py"]
+      }
+    },
+    {
+      "task_id": "fix_detect_cycle",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the detect_cycle implementation in python_programs/detect_cycle.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_detect_cycle.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/detect_cycle.py"]
+      }
+    },
+    {
+      "task_id": "fix_hanoi",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the hanoi implementation in python_programs/hanoi.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_hanoi.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "recursion",
+        "expected_files": ["python_programs/hanoi.py"]
+      }
+    },
+    {
+      "task_id": "fix_knapsack",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the knapsack implementation in python_programs/knapsack.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_knapsack.py",
+      "metadata": {
+        "difficulty": "hard",
+        "category": "dp",
+        "expected_files": ["python_programs/knapsack.py"]
+      }
+    },
+    {
+      "task_id": "fix_levenshtein",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the levenshtein implementation in python_programs/levenshtein.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_levenshtein.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "strings",
+        "expected_files": ["python_programs/levenshtein.py"]
+      }
+    },
+    {
+      "task_id": "fix_lis",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the lis implementation in python_programs/lis.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_lis.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "dp",
+        "expected_files": ["python_programs/lis.py"]
+      }
+    },
+    {
+      "task_id": "fix_max_sublist_sum",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the max_sublist_sum implementation in python_programs/max_sublist_sum.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_max_sublist_sum.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "arrays",
+        "expected_files": ["python_programs/max_sublist_sum.py"]
+      }
+    },
+    {
+      "task_id": "fix_next_permutation",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the next_permutation implementation in python_programs/next_permutation.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_next_permutation.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "arrays",
+        "expected_files": ["python_programs/next_permutation.py"]
+      }
+    },
+    {
+      "task_id": "fix_reverse_linked_list",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the reverse_linked_list implementation in python_programs/reverse_linked_list.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_reverse_linked_list.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "linked_list",
+        "expected_files": ["python_programs/reverse_linked_list.py"]
+      }
+    },
+    {
+      "task_id": "fix_rpn_eval",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the rpn_eval implementation in python_programs/rpn_eval.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_rpn_eval.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "stack",
+        "expected_files": ["python_programs/rpn_eval.py"]
+      }
+    },
+    {
+      "task_id": "fix_shortest_path_length",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the shortest_path_length implementation in python_programs/shortest_path_length.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_shortest_path_length.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/shortest_path_length.py"]
+      }
+    },
+    {
+      "task_id": "fix_sieve",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the sieve implementation in python_programs/sieve.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_sieve.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/sieve.py"]
+      }
+    },
+    {
+      "task_id": "fix_sqrt",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the sqrt implementation in python_programs/sqrt.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_sqrt.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/sqrt.py"]
+      }
+    },
+    {
+      "task_id": "fix_topological_ordering",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the topological_ordering implementation in python_programs/topological_ordering.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_topological_ordering.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/topological_ordering.py"]
+      }
+    },
+    {
+      "task_id": "fix_longest_common_subsequence",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the longest_common_subsequence implementation in python_programs/longest_common_subsequence.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_longest_common_subsequence.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "dp",
+        "expected_files": ["python_programs/longest_common_subsequence.py"]
+      }
+    },
+    {
+      "task_id": "fix_shunting_yard",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the shunting_yard implementation in python_programs/shunting_yard.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_shunting_yard.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "stack",
+        "expected_files": ["python_programs/shunting_yard.py"]
+      }
+    }
+  ]
+}

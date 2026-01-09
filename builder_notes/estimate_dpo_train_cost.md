@@ -79,3 +79,34 @@ If you tell me which model you’re using for (1) generation and (2) judging, an
 
 [1]: https://www.together.ai/pricing "Together AI -  Pricing"
 [2]: https://docs.together.ai/reference/chat-completions-1?utm_source=chatgpt.com "Create Chat Completion - Together.ai Docs"
+
+## Cost Estimate for Qwen-72B-Instruct-Turbo
+
+I ran
+
+```bash
+# DPO finetune
+ poetry run repo-agent prefs \
+  --suite eval/suites/pref_data_gen_pilot_1.json \
+  --rollouts 4 \
+  --out runs/prefs_cost_estimate_pilot/dpo_dataset_cost_est.jsonl \
+  --trace-dir runs/prefs_cost_estimate_pilot \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --temperature 0.7 \
+  --seed 42
+```
+
+```bash
+# Estimate costs
+poetry run repo-agent estimate-cost \
+  --trace-dir runs/prefs_cost_estimate_pilot \
+  --dataset runs/prefs_cost_estimate_pilot/dpo_dataset_cost_est.jsonl \
+  --price-in 1.20 \
+  --price-out 1.20 \
+  --target-pairs 3000
+```
+
+## TODO tomorrow (01/08)
+- Generate more data for the preference data used in the cost estimate
+- Try llama 4 scout
