@@ -224,3 +224,152 @@ So you’re not forced into “full trajectory or nothing.” Patch-only is usua
 <question>
 Q: what's the difference between a unified diff and a patch text? Can you output an example of what the json would look like if it contained a patch text and a truncated trajectory? Make it legible
 </question>
+<answer>
+A: A “unified diff” is the *diff format* (the one with `---/+++` file headers and `@@ ... @@` hunks). A “patch” is usually just a *file containing a diff*, most commonly in unified diff format (so in practice people often use “patch text” to mean “unified diff text you can apply with git/apply or patch(1)”). Git-style patches may also include extra headers (e.g., `diff --git ...`, file mode changes), but the hunks are still unified diff.
+
+Here’s a clean way to represent “patch-only + truncated trajectory” in our existing Together preference JSONL format:
+
+1) Outer preference record (what goes in the `.jsonl` file):
+```json
+{
+  "input": {
+    "messages": [
+      { "role": "system", "content": "You are a repo-fixing agent in a loop. ..." },
+      { "role": "user", "content": "GOAL:\\nFix quicksort so python_testcases/test_quicksort.py passes." }
+    ]
+  },
+  "preferred_output": [
+    { "role": "assistant", "content": "<PATCH_JSON_STRING>" }
+  ],
+  "non_preferred_output": [
+    { "role": "assistant", "content": "<PATCH_JSON_STRING>" }
+  ]
+}
+```
+
+2) The inner object you would serialize into `content` (this is the “patch text + truncated trajectory” payload):
+```json
+{
+  "type": "patch",
+  "summary": "Fix quicksort partition loop bounds.",
+  "patch_format": "unified_diff",
+  "patch": "diff --git a/python_programs/quicksort.py b/python_programs/quicksort.py\n--- a/python_programs/quicksort.py\n+++ b/python_programs/quicksort.py\n@@ -12,7 +12,7 @@ def quicksort(arr):\n-    while i < j:\n+    while i <= j:\n         ...\n",
+  "trajectory_truncated": [
+    {
+      "role": "assistant",
+      "tool_call": { "name": "read_file", "args": { "rel_path": "python_programs/quicksort.py" } }
+    },
+    {
+      "role": "tool",
+      "tool_result_snippet": "def quicksort(arr):\\n    ..."
+    },
+    {
+      "role": "assistant",
+      "tool_call": { "name": "write_file", "args": { "rel_path": "python_programs/quicksort.py" } }
+    },
+    {
+      "role": "tool",
+      "tool_result_snippet": "Wrote python_programs/quicksort.py (123 chars)."
+    },
+    {
+      "role": "tool",
+      "tool_result_snippet": "[TESTS PASS] 1 passed in 0.12s"
+    }
+  ],
+  "outcome": { "tests_ok": true }
+}
+```
+
+In code, you’d set `preferred_output[0].content = json.dumps(patch_obj)` (and same for the non-preferred). The truncated trajectory can be as short as you want (last 3–5 tool calls/results is a common compromise).
+</answer>
+<question>
+Q: So if I have 1K preference pairs that include path diff + truncated tool calls, do we expect dpo finetune + lora of Qwen2.5-72B-instruct to move the needle?
+</question>
+<answer>
+A: Possibly, but don’t assume a big lift—1K pairs is “small” for a 72B model. You’re much more likely to see measurable improvement if (a) the pairs are high quality (clean diffs, correct file targeting, meaningful contrast), and (b) your eval set matches the same distribution of tasks/tools/tests.
+
+My expectation:
+- **Tool-call formatting / schema-following**: may improve a bit, but SFT is usually the stronger lever for “always include rel_dir/max_files/etc.”
+- **Patch quality** (choosing the right file + making the right edit): you can see a lift if your preferred patches consistently reflect correct minimal fixes and your non-preferred ones are clearly worse.
+- **Overall pass rate**: could improve modestly on similar QuixBugs-style tasks, but regression is also possible if the dataset is noisy or too small.
+
+If budget allows, a safer path is: validate the patch+trajectory format on a smaller finetunable base first (e.g., 7B) with 1K–3K pairs, measure lift on a held-out suite, then decide whether it’s worth paying to adapt 72B.
+</answer>
+<question>
+Q: "if the dataset is noisy or too small."—what would a noisy dataset look like? I want to try dpo tune of 7B. I'm just trying to figure out what is the best way to use DPO with my coding agent to get a measurable that's significant even if it's small. I only have like $300 to spare. I thought that I could generate preference pairs using patch diff + tool calls, but I don't want to embark down this path if it's not likely to work out or there is a better alternative
+</question>
+<answer>
+A: “Noisy” preference data means the winner/loser label doesn’t consistently reflect the behavior you actually want. Common noise patterns in our setting:
+
+- **Both sides are wrong** (both fail tests), but one is marked preferred due to small tie-breakers or scoring quirks → teaches arbitrary preferences.
+- **Both sides are effectively identical** (same patch / same outcome), but still treated as a meaningful pair → weak signal.
+- **Winners rely on accidental artifacts** (e.g., editing the wrong file but tests pass due to a flaky test or cached state) → teaches bad habits.
+- **Bad diffs** (non-minimal, formatting churn, unrelated edits) labeled as preferred because they happened to pass once.
+- **Truncated trajectories omit the key decision** so the model can’t “see” why one was better.
+
+With a ~$300 budget, the best “highest chance of measurable lift” path is:
+1) **Target a 7B base** (cheaper, more responsive to small datasets).
+2) **Use a held-out eval suite** that matches the training distribution (QuixBugs python tasks).
+3) **Generate pairs where at least one rollout passes tests** (or weight pass/fail far above tie-breakers) to reduce label noise.
+4) Prefer **patch-only** or **last-write-only** outputs to keep tokens down while giving a direct learning target.
+5) Start with **~200–500 high-quality pairs**, run a quick DPO LoRA, evaluate. If you see even a small lift, scale toward 1K+ pairs.
+
+Alternative that often pays off faster than DPO for tool-call correctness: do a small **SFT pass** on tool-call formatting (few hundred examples) to stop argument-missing failures, then use DPO to refine patch quality.
+</answer>
+<question>
+Q: Okay, SFT first. That feels like a good idea. How do we generate data? Just run like a model that's good at following instrutions on ~300 tasks (there will have to be duplicated tasks because QuixBugs only has ~40 tasks) and filter out incorrect tool calls?
+</question>
+<answer>
+A: That’s a solid approach, with a couple refinements:
+
+1) **Use a strong “teacher” model** (e.g., Qwen-72B / GPT) to generate *valid* tool-call trajectories on the QuixBugs tasks. You can reuse the same ~40 tasks by varying:
+   - temperature / seed
+   - slightly different goal phrasing (paraphrases)
+   - different starting repo states (optional; but keep it simple)
+
+2) **Log and extract training examples** from traces:
+   - For each step, the SFT target is the *next assistant tool call* (name + fully specified args).
+   - Input is the conversation context you want the student to condition on (system + goal + recent tool results).
+
+3) **Filter aggressively for correctness**:
+   - Drop any step where the tool call args are invalid or the tool returns `ok=False` due to missing required args / bad paths.
+   - Optionally keep only trajectories that eventually pass tests (higher-quality demonstrations).
+
+4) **Keep the format minimal**:
+   - Start with SFT just for tool-call formatting: ensure required fields are present and types are correct.
+   - You don’t need 300 *unique* tasks; you need 300–1000 *high-quality tool-call steps*.
+
+So yes: duplicate tasks is fine. The key is filtering for “valid tool calls” and extracting step-level supervision so the 7B model learns the schema reliably.
+</answer>
+<question>
+Q: If 1 task rollout has say 6 tool calls, do we actually get 6 training samples from that rollout?
+</question>
+<answer>
+A: Yes—if you build the SFT dataset at the *step level*, one rollout with 6 tool calls can yield ~6 supervised examples (often “state → next tool call”). Each example uses the context up to that point as input, and the target is the next tool call (name + args). You can also include a final “final” step as a 7th sample if you want the model to learn when to stop, but for tool-call formatting SFT it’s common to focus just on the tool-call steps.
+</answer>
+<question>
+Q: Nice, so 100 rollouts could give us ~300-400 training samples accounting for incorrect tool calls and FAIL trajectories. Okay, I like this so far. So what do we need to plan high-level for this SFT. I think I want to take this approach instead of going with DPO first
+</question>
+<answer>
+A: High-level SFT plan (tool-call correctness first):
+
+1) **Decide the target behavior**: start with “always emit valid tool calls with required args” (schema-following), not full bug-fixing quality.
+2) **Collect teacher traces**: run a strong model as the agent over a suite (QuixBugs), log full traces (llm_request/llm_action/tool_result). Use multiple seeds/temps to get diversity.
+3) **Extract step-level SFT examples**:
+   - Input: system + goal + last K tool results (or full recent message window).
+   - Target: the next `ToolCallAction` JSON (name + args) exactly.
+4) **Filter + clean**:
+   - Drop malformed/invalid tool calls (missing required args).
+   - Prefer trajectories that reach passing tests; optionally keep some “good recovery” examples.
+   - Truncate long tool outputs to keep token cost down.
+5) **Train a small LoRA SFT** on a finetunable 7B base (cheap iteration).
+6) **Evaluate** on held-out tasks:
+   - Primary metric: tool-call validity rate (required args present, tool calls succeed).
+   - Secondary: pass rate and avg steps on a fixed eval suite.
+7) **Iterate**: if validity improves, then you can layer DPO later for “which valid behavior is better.”
+
+This gives you a measurable early win (schema adherence) with low budget, and it sets you up to make DPO more effective later.
+</answer><br>
+Target behavior: “always emit valid tool calls with required args”
+<quesiton>
+</quesiton>
