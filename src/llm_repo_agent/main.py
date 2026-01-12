@@ -17,6 +17,8 @@ import llm_repo_agent.eval.metrics as eval_metrics
 import llm_repo_agent.eval.report as eval_report
 import llm_repo_agent.estimate_cost as estimate_cost
 import llm_repo_agent.prefs.rollouts as prefs_rollouts
+import llm_repo_agent.sft.config as sft_config
+import llm_repo_agent.sft.extract as sft_extract
 from dotenv import load_dotenv
 
 
@@ -169,6 +171,26 @@ def cmd_estimate_cost(args):
   print(f"[estimate-cost] target_pairs={result['target_pairs']} scaled_cost=${result['scaled_cost']:.2f}")
 
 
+def cmd_sft_extract(args):
+  """Extract step-level SFT data from trace logs."""
+  cfg = sft_config.SFTExtractConfig(
+      trace_dir=Path(args.trace_dir),
+      output_path=Path(args.output),
+      require_success=args.require_success,
+      require_valid_tool_ok=args.require_valid_tool_ok,
+      max_context_chars=args.max_context_chars,
+      progress=not args.quiet,
+  )
+
+  samples = sft_extract.extract_sft_samples(cfg)
+  cfg.output_path.parent.mkdir(parents=True, exist_ok=True)
+  with cfg.output_path.open("w", encoding="utf-8") as f:
+    for sample in samples:
+      f.write(json.dumps(sample, ensure_ascii=False) + "\n")
+
+  print(f"[sft-extract] Wrote {len(samples)} samples to {cfg.output_path}")
+
+
 def _print_final_output(out):
   """Nicely format final outputs when tests were run."""
   if isinstance(out, dict) and out.get("type") == "final":
@@ -306,6 +328,25 @@ def main():
   prefs_parser.add_argument("--keep-sandbox", action="store_true", help="Keep sandbox directories after runs.")
   prefs_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
   prefs_parser.set_defaults(func=cmd_prefs)
+
+  # -------------------------------------------------------------------------
+  # sft-extract: Extract SFT training data from trace logs
+  # -------------------------------------------------------------------------
+  sft_parser = subparsers.add_parser("sft-extract", help="Extract SFT training data from trace logs")
+  sft_parser.add_argument("--trace-dir", type=str, required=True, help="Directory containing trace JSONL files")
+  sft_parser.add_argument("--output", type=str, required=True, help="Output JSONL file for SFT dataset")
+  sft_parser.add_argument("--require-success", action="store_true", default=True,
+                          help="Only include runs where tests passed (default: True)")
+  sft_parser.add_argument("--no-require-success", dest="require_success", action="store_false",
+                          help="Include runs regardless of test outcome")
+  sft_parser.add_argument("--require-valid-tool-ok", action="store_true", default=True,
+                          help="Only include steps where tool_result.ok is True (default: True)")
+  sft_parser.add_argument("--no-require-valid-tool-ok", dest="require_valid_tool_ok", action="store_false",
+                          help="Include steps regardless of tool_result.ok")
+  sft_parser.add_argument("--max-context-chars", type=int, default=8000,
+                          help="Max chars for tool output in context (default: 8000)")
+  sft_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress progress output")
+  sft_parser.set_defaults(func=cmd_sft_extract)
 
   # -------------------------------------------------------------------------
   # estimate-cost: Estimate preference data generation cost
