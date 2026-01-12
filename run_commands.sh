@@ -1,3 +1,7 @@
+#########################
+### RUN EVAL SUITE SFT ##
+#########################
+
 # Run eval suite using Together Base Qwen model
 poetry run repo-agent eval \
     --suite eval/suites/my_suite.json \
@@ -47,6 +51,10 @@ poetry run repo-agent eval \
     --llm-provider together \
     --model justinbarrye_c241/Qwen2.5-7B-Instruct-dpo-lora-4bf2fea2-4d8be882
 
+#########################
+######GEN DPO DATA ######
+#########################
+
 # DPO finetune
  poetry run repo-agent prefs \
   --suite eval/suites/pref_data_gen_pilot_1.json \
@@ -59,15 +67,6 @@ poetry run repo-agent eval \
   --seed 42 \
   --max-workers 4
 
-# Estimate costs
-# Qwen-72
-poetry run repo-agent estimate-cost \
-  --trace-dir runs/prefs_cost_estimate_pilot \
-  --dataset runs/prefs_cost_estimate_pilot/dpo_dataset_cost_est.jsonl \
-  --price-in 1.20 \
-  --price-out 1.20 \
-  --target-pairs 3000
-
 # Run next after verifiying estimate costs works
  poetry run repo-agent prefs \
   --suite eval/suites/pref_cost_estimate_suite.json \
@@ -78,3 +77,44 @@ poetry run repo-agent estimate-cost \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
   --temperature 0.7 \
   --seed 42
+
+#########################
+########### SFT #########
+#########################
+
+# Run DPO finetune command to create SFT dataset using qwen-72B
+ poetry run repo-agent prefs \
+  --suite eval/suites/gcd.json \
+  --rollouts 10 \
+  --out runs/instruction_tuning_test/instruction_tuning_test.jsonl \
+  --trace-dir runs/instruction_tuning_test \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --temperature 0.7 \
+  --seed 42 \
+  --max-workers 8
+
+# Run DPO finetune command to create SFT dataset using gpt41mini
+ poetry run repo-agent prefs \
+  --suite eval/suites/sft_finetune_task_suite.json \
+  --rollouts 4 \
+  --out runs/instruction_tuning/dpo_dataset_cost_est.jsonl \
+  --trace-dir runs/instruction_tuning \
+  --llm-provider openai \
+  --model "gpt-4.1-mini" \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8
+
+#########################
+## ESTIMATE COSTS #######
+#########################
+
+# Estimate costs
+# Qwen-72
+poetry run repo-agent estimate-cost \
+  --trace-dir runs/prefs_cost_estimate_pilot \
+  --dataset runs/prefs_cost_estimate_pilot/dpo_dataset_cost_est.jsonl \
+  --price-in 1.20 \
+  --price-out 1.20 \
+  --target-pairs 3000
