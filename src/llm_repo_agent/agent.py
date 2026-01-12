@@ -69,7 +69,8 @@ class RepoAgent:
     self.tools = tools
     self.trace = trace
     self.cfg = cfg
-    self.prompt = Prompt()
+    tool_protocol = getattr(llm, "tool_protocol", "native")
+    self.prompt = Prompt(tool_protocol=tool_protocol)
     self._progress = cfg.progress
 
   def _p(self, msg: str) -> None:
@@ -163,13 +164,20 @@ class RepoAgent:
       base_messages = getattr(self.llm, "_messages", None)
       request_messages = list(base_messages) if isinstance(base_messages, list) else []
       if last_tool_result is not None:
-        tool_call_id = getattr(self.llm, "_last_tool_call_id", None)
-        if tool_call_id:
+        tool_protocol = getattr(self.llm, "tool_protocol", "native")
+        if tool_protocol == "json":
           request_messages.append({
-              "role": "tool",
-              "tool_call_id": tool_call_id,
-              "content": last_tool_result,
+              "role": "user",
+              "content": f"[tool_result]\n{last_tool_result}",
           })
+        else:
+          tool_call_id = getattr(self.llm, "_last_tool_call_id", None)
+          if tool_call_id:
+            request_messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": last_tool_result,
+            })
       pending_notes = getattr(self.llm, "_pending_driver_notes", None)
       if pending_notes:
         for note in pending_notes:

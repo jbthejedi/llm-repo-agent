@@ -57,6 +57,7 @@ class PrefsConfig:
         model: Model identifier to use.
         llm_provider: Provider backend.
         together_api_key: Optional Together API key override.
+        tool_protocol: Tool calling protocol ("native" or "json").
         temperature: Sampling temperature.
         base_seed: Base seed for reproducibility.
         progress: Whether to show progress output.
@@ -74,6 +75,7 @@ class PrefsConfig:
     model: Optional[str] = None
     llm_provider: str = "together"
     together_api_key: Optional[str] = None
+    tool_protocol: str = "native"
     temperature: float = 0.7
     base_seed: int = 42
     progress: bool = True
@@ -106,6 +108,7 @@ def run_single_rollout(item: RolloutWorkItem, cfg: PrefsConfig) -> RolloutResult
         model=cfg.model,
         llm_provider=cfg.llm_provider,
         together_api_key=cfg.together_api_key,
+        tool_protocol=cfg.tool_protocol,
         progress=False,  # Disable per-step progress in parallel mode
     )
 
@@ -117,6 +120,7 @@ def run_single_rollout(item: RolloutWorkItem, cfg: PrefsConfig) -> RolloutResult
             together_api_key=cfg.together_api_key,
             temperature=cfg.temperature,
             seed=item.seed,
+            tool_protocol=cfg.tool_protocol,
         ))
 
     # Run the task
@@ -168,6 +172,7 @@ class PrefsRunner:
                 together_api_key=self.cfg.together_api_key,
                 temperature=self.cfg.temperature,
                 seed=seed,
+                tool_protocol=self.cfg.tool_protocol,
             ))
         return factory
 

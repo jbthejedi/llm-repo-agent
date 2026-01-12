@@ -121,16 +121,52 @@ def _extract_steps(events: List[Dict[str, Any]], cfg: SFTExtractConfig) -> List[
                 pending_action = None
                 continue
 
-            context = _normalize_messages(pending_action["messages"], cfg.max_context_chars)
-            tool_call_json = _serialize_tool_call(pending_action["action"])
-            context.append({"role": "assistant", "content": tool_call_json})
+            context = _normalize_messages(pending_action["messages"], cfg.max_context_chars, cfg.output_format)
+            if cfg.output_format == "native":
+                tool_call_msg = _tool_call_message_from_action(pending_action["action"])
+                if tool_call_msg:
+                    context.append(tool_call_msg)
+            else:
+                tool_call_json = _serialize_tool_call(pending_action["action"])
+                context.append({"role": "assistant", "content": tool_call_json})
             samples.append({"messages": context})
             pending_action = None
 
     return samples
 
 
-def _normalize_messages(messages: List[Dict[str, Any]], max_context_chars: int) -> List[Dict[str, Any]]:
+def _normalize_messages(messages: List[Dict[str, Any]], max_context_chars: int, output_format: str) -> List[Dict[str, Any]]:
+    if output_format == "native":
+        return _normalize_messages_native(messages, max_context_chars)
+    return _normalize_messages_json(messages, max_context_chars)
+
+
+def _normalize_messages_native(messages: List[Dict[str, Any]], max_context_chars: int) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "tool":
+            content = _truncate(str(msg.get("content") or ""), max_context_chars)
+            tool_call_id = msg.get("tool_call_id")
+            entry = {"role": "tool", "content": content}
+            if tool_call_id:
+                entry["tool_call_id"] = tool_call_id
+            normalized.append(entry)
+            continue
+        if role == "assistant" and "tool_calls" in msg:
+            tool_calls = msg.get("tool_calls") or []
+            if tool_calls:
+                normalized.append({"role": "assistant", "tool_calls": tool_calls})
+            continue
+        if role in {"system", "user", "assistant"}:
+            content = msg.get("content")
+            if content is None:
+                content = ""
+            normalized.append({"role": role, "content": str(content)})
+    return normalized
+
+
+def _normalize_messages_json(messages: List[Dict[str, Any]], max_context_chars: int) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     for msg in messages:
         role = msg.get("role")
@@ -174,6 +210,30 @@ def _tool_call_from_tool_call(tool_call: Dict[str, Any]) -> Optional[Dict[str, A
 
 def _serialize_tool_call(action: Dict[str, Any]) -> str:
     return json.dumps(action, ensure_ascii=False)
+
+def _tool_call_message_from_action(action: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    name = action.get("name")
+    args = action.get("args")
+    if not isinstance(name, str) or not isinstance(args, dict):
+        return None
+    args_obj = dict(args)
+    thought = action.get("thought")
+    if thought:
+        args_obj = dict(args_obj)
+        args_obj["thought"] = thought
+    return {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": json.dumps(args_obj, ensure_ascii=False),
+                },
+            }
+        ],
+    }
 
 
 def _is_valid_tool_call(action: Dict[str, Any]) -> bool:

@@ -52,6 +52,7 @@ def test_sft_extract_basic(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
+        output_format="json",
         progress=False,
     )
 
@@ -95,6 +96,7 @@ def test_sft_extract_skips_invalid_tool_args(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
+        output_format="json",
         progress=False,
     )
 
@@ -135,6 +137,7 @@ def test_sft_extract_requires_success(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
+        output_format="json",
         progress=False,
     )
 
@@ -175,6 +178,7 @@ def test_sft_extract_allows_failed_tool_when_configured(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=False,
+        output_format="json",
         progress=False,
     )
 
@@ -222,6 +226,7 @@ def test_sft_extract_converts_tool_messages_and_truncates(tmp_path):
         require_success=True,
         require_valid_tool_ok=True,
         max_context_chars=10,
+        output_format="json",
         progress=False,
     )
 
@@ -283,6 +288,7 @@ def test_sft_extract_handles_tool_calls_in_messages(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
+        output_format="json",
         progress=False,
     )
 
@@ -293,6 +299,56 @@ def test_sft_extract_handles_tool_calls_in_messages(tmp_path):
         m["role"] == "assistant" and "\"name\": \"list_files\"" in m["content"]
         for m in messages
     )
+
+
+def test_sft_extract_native_preserves_tool_calls_and_tool_role(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix it"},
+                    {"role": "tool", "tool_call_id": "call_1", "content": "tool output"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "read_file",
+                    "args": {"rel_path": "a.py", "max_chars": 10},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "read_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        output_format="native",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert len(samples) == 1
+    messages = samples[0]["messages"]
+    assert any(m["role"] == "tool" for m in messages)
+    assert any(m["role"] == "assistant" and "tool_calls" in m for m in messages)
 
 
 def test_cmd_sft_extract_writes_output(tmp_path):
@@ -330,6 +386,7 @@ def test_cmd_sft_extract_writes_output(tmp_path):
         require_success=True,
         require_valid_tool_ok=True,
         max_context_chars=8000,
+        output_format="json",
         quiet=True,
     )
 

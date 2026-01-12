@@ -74,6 +74,7 @@ class EvalConfig:
         model: Model identifier to use.
         llm_provider: Provider backend ("openai" or "together").
         together_api_key: Optional Together API key override.
+        tool_protocol: Tool calling protocol ("native" or "json").
         progress: Whether to show progress output.
     """
 
@@ -85,6 +86,7 @@ class EvalConfig:
   model: Optional[str] = None
   llm_provider: str = "openai"
   together_api_key: Optional[str] = None
+  tool_protocol: str = "native"
   progress: bool = True
 
 
@@ -112,6 +114,7 @@ class EvalRunner:
         provider=self.cfg.llm_provider,
         model=self.cfg.model,
         together_api_key=self.cfg.together_api_key,
+        tool_protocol=self.cfg.tool_protocol,
     ))
 
   def run_task(self, task: TaskSpec) -> TaskResult:

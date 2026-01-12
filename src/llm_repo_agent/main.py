@@ -40,6 +40,7 @@ def cmd_run(args):
       provider=args.llm_provider,
       model=args.model,
       together_api_key=args.together_api_key,
+      tool_protocol=args.tool_protocol,
   )
   llm = llm_module.LLMFactory.build(llm_cfg)
   model_name = getattr(llm, "model", None) or (args.model or "unknown")
@@ -86,6 +87,7 @@ def cmd_eval(args):
       model=args.model,
       llm_provider=args.llm_provider,
       together_api_key=args.together_api_key,
+      tool_protocol=args.tool_protocol,
       progress=not args.quiet,
   )
 
@@ -128,6 +130,7 @@ def cmd_prefs(args):
       model=args.model,
       llm_provider=args.llm_provider,
       together_api_key=args.together_api_key,
+      tool_protocol=args.tool_protocol,
       temperature=args.temperature,
       base_seed=args.seed,
       progress=not args.quiet,
@@ -179,6 +182,7 @@ def cmd_sft_extract(args):
       require_success=args.require_success,
       require_valid_tool_ok=args.require_valid_tool_ok,
       max_context_chars=args.max_context_chars,
+      output_format=args.output_format,
       progress=not args.quiet,
   )
 
@@ -241,6 +245,13 @@ def main():
       help="LLM provider backend (default: openai).",
   )
   run_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides provider default).")
+  run_parser.add_argument(
+      "--tool-protocol",
+      type=str,
+      choices=["native", "json"],
+      default="native",
+      help="Tool calling protocol (native tool calls or JSON-in-content).",
+  )
   run_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   run_parser.add_argument("--sandbox", dest="sandbox", action=argparse.BooleanOptionalAction, default=True,
                           help="Run against a temporary sandbox copy of the repo (default: enabled).")
@@ -274,6 +285,13 @@ def main():
   )
   eval_parser.add_argument("--max-iters", type=int, default=20, help="Max agent iterations per task")
   eval_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides OPENAI_MODEL env)")
+  eval_parser.add_argument(
+      "--tool-protocol",
+      type=str,
+      choices=["native", "json"],
+      default="native",
+      help="Tool calling protocol (native tool calls or JSON-in-content).",
+  )
   eval_parser.add_argument(
       "--llm-provider",
       type=str,
@@ -312,6 +330,13 @@ def main():
   )
   prefs_parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-72B-Instruct-Turbo",
                             help="Model to use (default: Qwen/Qwen2.5-72B-Instruct-Turbo)")
+  prefs_parser.add_argument(
+      "--tool-protocol",
+      type=str,
+      choices=["native", "json"],
+      default="native",
+      help="Tool calling protocol (native tool calls or JSON-in-content).",
+  )
   prefs_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   prefs_parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature (default: 0.7)")
   prefs_parser.add_argument("--seed", type=int, default=42, help="Base seed for reproducibility (default: 42)")
@@ -345,6 +370,14 @@ def main():
                           help="Include steps regardless of tool_result.ok")
   sft_parser.add_argument("--max-context-chars", type=int, default=8000,
                           help="Max chars for tool output in context (default: 8000)")
+  sft_parser.add_argument(
+      "--format",
+      dest="output_format",
+      type=str,
+      choices=["json", "native"],
+      default="json",
+      help="Output format for SFT samples (default: json).",
+  )
   sft_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress progress output")
   sft_parser.set_defaults(func=cmd_sft_extract)
 

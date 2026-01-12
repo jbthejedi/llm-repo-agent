@@ -139,3 +139,66 @@ poetry run repo-agent estimate-cost \
 poetry run repo-agent sft-extract \
   --trace-dir runs/instruction_tuning_test_3 \
   --output runs/instruction_tuning_test_3/sft_dataset.jsonl
+
+##########################################
+#### TEST JSON TOOL CALLING (TEXT) #######
+##########################################
+ poetry run repo-agent prefs \
+  --suite eval/suites/gcd.json \
+  --rollouts 10 \
+  --out runs/json_tool_calling_test/json_tool_calling.jsonl \
+  --trace-dir runs/json_tool_calling_test \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8 \
+  --tool-protocol json
+
+  poetry run repo-agent prefs \
+  --suite eval/suites/gcd.json \
+  --rollouts 4 \
+  --out runs/json_tool_calling_test/json_tool_calling_test.jsonl \
+  --trace-dir runs/json_tool_calling_test \
+  --llm-provider openai \
+  --model "gpt-4.1-mini" \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8
+
+ poetry run repo-agent prefs \
+  --suite eval/suites/pref_cost_estimate_suite.json \
+  --rollouts 2 \
+  --out runs/test_qwen25_72B_it_json/json_tool_calling.jsonl \
+  --trace-dir runs/test_qwen25_72B_it_json \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8 \
+  --tool-protocol json
+
+  poetry run repo-agent prefs \
+  --suite eval/suites/pref_cost_estimate_suite.json \
+  --rollouts 2 \
+  --out runs/test_qwen25_7_it_json/json_tool_calling.jsonl \
+  --trace-dir runs/test_qwen25_7_it_json \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-7B-Instruct-Turbo \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8 \
+  --tool-protocol json
+
+
+poetry run repo-agent prefs \
+  --suite eval/suites/pref_cost_estimate_suite.json \
+  --rollouts 2 \
+  --out runs/test_qwen3_8b_it_json/json_tool_calling.jsonl \
+  --trace-dir runs/test_qwen3_8b_it_json \
+  --llm-provider together \
+  --model Qwen/Qwen3-8B \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8 \
+  --tool-protocol json

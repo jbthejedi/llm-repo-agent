@@ -132,6 +132,7 @@ poetry run repo-agent run \
   --test <command>        # Test command (e.g., "python -m pytest -q")
   --llm-provider <name>   # openai | together (default: openai)
   --model <model>         # Override model for the provider
+  --tool-protocol <mode>  # native | json (default: native)
   --together-api-key <k>  # Together API key override (optional)
   --trace <path>          # JSONL trace file (default: runs/trace.jsonl)
   --test-policy <policy>  # on_write | on_final | never (default: on_write)
@@ -158,6 +159,7 @@ poetry run repo-agent eval \
   --max-iters <n>         # Max agent iterations per task (default: 20)
   --model <model>         # Override OPENAI_MODEL env var
   --llm-provider <name>   # openai | together (default: openai)
+  --tool-protocol <mode>  # native | json (default: native)
   --together-api-key <k>  # Together API key override (optional)
   --quiet                 # Suppress per-task progress output
 ```
@@ -221,6 +223,7 @@ poetry run repo-agent prefs \
   --trace-dir <path>          # Directory for trace files (default: runs/prefs)
   --llm-provider <name>       # openai | together (default: together)
   --model <model>             # Model to use (default: Qwen/Qwen2.5-72B-Instruct-Turbo)
+  --tool-protocol <mode>      # native | json (default: native)
   --temperature <float>       # Sampling temperature (default: 0.7)
   --seed <int>                # Base seed for reproducibility (default: 42)
   --max-iters <n>             # Max agent iterations per task (default: 20)
@@ -315,6 +318,23 @@ poetry run repo-agent estimate-cost \
 
 ---
 
+### `sft-extract`: SFT Training Data
+
+Extract step-level SFT samples from trace logs.
+
+```bash
+poetry run repo-agent sft-extract \
+  --trace-dir runs/prefs \
+  --output runs/sft/sft_dataset.jsonl \
+  --format json
+```
+
+**Formats:**
+- `json`: tool calls as JSON in `assistant.content`, tool results in `user` messages.
+- `native`: tool calls in `assistant.tool_calls`, tool results in `role: tool` messages.
+
+---
+
 ## How It Works
 
 ```
@@ -346,7 +366,7 @@ poetry run repo-agent estimate-cost \
 **Step by step:**
 
 1. **Conversation Start:** Seed multi-turn messages with system rules + goal
-2. **LLM Call:** Model returns exactly one typed action (`ToolCallAction` or `FinalAction`) using tool calls; tool results are appended as `tool` messages each turn
+2. **LLM Call:** Model returns exactly one typed action (`ToolCallAction` or `FinalAction`). In `native` mode, tool results are appended as `tool` messages; in `json` mode they are appended as user text `[tool_result] ...`
 3. **Action Parsing:** Strict validation; common mistakes coerced (e.g., tool name in `type` field)
 4. **Tool Execution:** `ActionController` dispatches to `RepoTools` with path safety checks
 5. **Test Execution:** If `write_file` and `--test-policy on_write`, driver runs tests

@@ -13,4 +13,5 @@ class SFTExtractConfig:
     require_valid_tool_ok: bool = True
     max_context_chars: int = 8000
     include_recovery: bool = False
+    output_format: str = "json"  # "json" | "native"
     progress: bool = True

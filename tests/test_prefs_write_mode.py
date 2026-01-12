@@ -126,6 +126,7 @@ def test_cmd_prefs_passes_write_mode(monkeypatch, tmp_path):
         model="model",
         llm_provider="together",
         together_api_key=None,
+        tool_protocol="json",
         temperature=0.1,
         seed=7,
         quiet=True,
@@ -135,3 +136,4 @@ def test_cmd_prefs_passes_write_mode(monkeypatch, tmp_path):
 
     assert captured["suite_path"] == Path(args.suite)
     assert captured["cfg"].write_mode == "append"
+    assert captured["cfg"].tool_protocol == "json"
