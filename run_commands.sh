@@ -110,7 +110,7 @@ poetry run repo-agent eval \
 # Run DPO finetune command to create SFT dataset using gpt41mini
  poetry run repo-agent prefs \
   --suite eval/suites/sft_finetune_task_suite.json \
-  --rollouts 4 \
+  --rollouts 3 \
   --out runs/instruction_tuning/dpo_dataset_cost_est.jsonl \
   --trace-dir runs/instruction_tuning \
   --llm-provider openai \
@@ -202,3 +202,17 @@ poetry run repo-agent prefs \
   --seed 42 \
   --max-workers 8 \
   --tool-protocol json
+
+
+##############################
+#### CALL SFT TOGETHER #######
+##############################
+poetry run python sft_finetune_quick.py \
+  --dataset runs/instruction_tuning/sft_dataset.jsonl \
+  --model Qwen/Qwen3-8B \
+  --suffix qwen3-8b-sft-pilot \
+  --epochs 1 \
+  --batch-size max \
+  --learning-rate 1e-5 \
+  --lora \
+  --watch

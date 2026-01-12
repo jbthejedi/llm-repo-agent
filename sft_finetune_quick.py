@@ -181,7 +181,18 @@ def main() -> None:
     if args.watch:
         import time
 
-        terminal = {"completed", "failed", "cancelled", "canceled", "succeeded", "success", "errored", "error"}
+        terminal = {
+            "completed",
+            "completed_with_warnings",
+            "failed",
+            "cancelled",
+            "canceled",
+            "succeeded",
+            "succeeded_with_warnings",
+            "success",
+            "errored",
+            "error",
+        }
         while True:
             cur = client.fine_tuning.retrieve(id=job.id)
             status = str(cur.status)
