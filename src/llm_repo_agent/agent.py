@@ -170,6 +170,13 @@ class RepoAgent:
               "tool_call_id": tool_call_id,
               "content": last_tool_result,
           })
+      pending_notes = getattr(self.llm, "_pending_driver_notes", None)
+      if pending_notes:
+        for note in pending_notes:
+          request_messages.append({
+              "role": "system",
+              "content": f"DRIVER NOTE:\n{note}",
+          })
       self.trace.log("llm_request", LLMRequestPayload(t=t, messages=request_messages))
       # Ask LLM for next action (now returns a typed Action or raises ActionParseError)
       try:

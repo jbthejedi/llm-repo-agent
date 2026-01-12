@@ -61,6 +61,7 @@ class ChatCompletionsLLM:
     self._last_usage: Dict[str, int] | None = None
     self._last_trailing: str | None = None
     self._last_parse_error: bool = False
+    self._pending_driver_notes: List[str] = []
 
     # Initialize client - use OpenAI-compatible client for base_url endpoints.
     if OpenAI is None:
@@ -92,6 +93,7 @@ class ChatCompletionsLLM:
     ]
     self._last_tool_call_id = None
     self._tool_call_counter = 0
+    self._pending_driver_notes = []
 
   def add_driver_note(self, note: str) -> None:
     """Inject a driver note into the conversation as a system message."""
@@ -99,10 +101,25 @@ class ChatCompletionsLLM:
       return
     if not self._messages:
       return
+    last = self._messages[-1]
+    if last.get("role") == "assistant" and last.get("tool_calls"):
+      # Defer until the tool result is appended to keep tool_call -> tool adjacency.
+      self._pending_driver_notes.append(note)
+      return
     self._messages.append({
-      "role": "system",
-      "content": f"DRIVER NOTE:\n{note}",
+        "role": "system",
+        "content": f"DRIVER NOTE:\n{note}",
     })
+
+  def _flush_driver_notes(self) -> None:
+    if not self._pending_driver_notes:
+      return
+    for note in self._pending_driver_notes:
+      self._messages.append({
+          "role": "system",
+          "content": f"DRIVER NOTE:\n{note}",
+      })
+    self._pending_driver_notes = []
 
   def _generate_tool_call_id(self) -> str:
     """Generate a unique tool call ID."""
@@ -184,6 +201,8 @@ class ChatCompletionsLLM:
         "tool_call_id": self._last_tool_call_id,
         "content": tool_result,
       })
+    # Append any deferred driver notes after tool results to keep proper ordering.
+    self._flush_driver_notes()
 
     ##################################
     ########## CALL THE API

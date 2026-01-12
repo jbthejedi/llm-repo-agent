@@ -83,14 +83,27 @@ poetry run repo-agent eval \
 #########################
 
 # Run DPO finetune command to create SFT dataset using qwen-72B
+# test
  poetry run repo-agent prefs \
   --suite eval/suites/gcd.json \
   --rollouts 10 \
-  --out runs/instruction_tuning_test/instruction_tuning_test.jsonl \
-  --trace-dir runs/instruction_tuning_test \
+  --out runs/instruction_tuning_test_2/instruction_tuning_test.jsonl \
+  --trace-dir runs/instruction_tuning_test_2 \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
-  --temperature 0.7 \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8
+
+# another test
+ poetry run repo-agent prefs \
+  --suite eval/suites/gcd.json \
+  --rollouts 10 \
+  --out runs/instruction_tuning_test_3/instruction_tuning_test.jsonl \
+  --trace-dir runs/instruction_tuning_test_3 \
+  --llm-provider openai \
+  --model gpt-4.1-mini \
+  --temperature 0.0 \
   --seed 42 \
   --max-workers 8
 
@@ -118,3 +131,11 @@ poetry run repo-agent estimate-cost \
   --price-in 1.20 \
   --price-out 1.20 \
   --target-pairs 3000
+
+
+#############################
+#### SFT EXTRACT DATA #######
+#############################
+poetry run repo-agent sft-extract \
+  --trace-dir runs/instruction_tuning_test_3 \
+  --output runs/instruction_tuning_test_3/sft_dataset.jsonl
