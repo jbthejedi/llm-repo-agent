@@ -92,7 +92,10 @@ def cmd_eval(args):
   )
 
   runner = eval_runner.EvalRunner(cfg=cfg)
-  results = runner.run_suite(suite)
+  if args.num_workers and args.num_workers > 1:
+    results = runner.run_suite_parallel(suite, max_workers=args.num_workers)
+  else:
+    results = runner.run_suite(suite)
 
   # Compute and display metrics
   metrics = eval_metrics.compute_metrics(results)
@@ -247,6 +250,8 @@ def main():
   run_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides provider default).")
   run_parser.add_argument(
       "--tool-protocol",
+      "--tool-mode",
+      dest="tool_protocol",
       type=str,
       choices=["native", "json"],
       default="native",
@@ -287,6 +292,8 @@ def main():
   eval_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides OPENAI_MODEL env)")
   eval_parser.add_argument(
       "--tool-protocol",
+      "--tool-mode",
+      dest="tool_protocol",
       type=str,
       choices=["native", "json"],
       default="native",
@@ -298,6 +305,14 @@ def main():
       choices=["openai", "together"],
       default="openai",
       help="LLM provider backend (default: openai).",
+  )
+  eval_parser.add_argument(
+      "--num-workers",
+      "--num-worker",
+      dest="num_workers",
+      type=int,
+      default=0,
+      help="Number of parallel worker threads for eval (0/1 = sequential).",
   )
   eval_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
   eval_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")

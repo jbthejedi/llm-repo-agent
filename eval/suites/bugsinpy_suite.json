@@ -1,0 +1,269 @@
+{
+  "name": "bugsinpy_suite",
+  "description": "BugsInPy tasks (requires checked-out bug instances per task).",
+  "defaults": {
+    "test_cmd": "/Users/justinbarry/projects/BugsInPy/framework/bin/bugsinpy-test -r"
+  },
+  "tasks": [
+    {
+      "task_id": "PySnooper_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/PySnooper_1",
+      "goal": "Fix BugsInPy project 'PySnooper' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_chinese.py.",
+      "metadata": {
+        "project": "PySnooper",
+        "bug_id": 1,
+        "test_file": "tests/test_chinese.py",
+        "python_version": "3.8.1",
+        "buggy_commit_id": "e21a31162f4c54be693d8ca8260e42393b39abd3",
+        "fixed_commit_id": "56f22f8ffe1c6b2be4d2cf3ad1987fdb66113da2"
+      }
+    },
+    {
+      "task_id": "ansible_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/ansible_1",
+      "goal": "Fix BugsInPy project 'ansible' bug 1 so the relevant tests pass. Relevant test file(s): test/units/galaxy/test_collection.py.",
+      "metadata": {
+        "project": "ansible",
+        "bug_id": 1,
+        "test_file": "test/units/galaxy/test_collection.py",
+        "python_version": "3.6.9",
+        "buggy_commit_id": "25c5388fdec9e56517a93feb5e8d485680946c25",
+        "fixed_commit_id": "343ffaa18b63c92e182b16c3ad84b8d81ca4df69"
+      }
+    },
+    {
+      "task_id": "black_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/black_1",
+      "goal": "Fix BugsInPy project 'black' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_black.py.",
+      "metadata": {
+        "project": "black",
+        "bug_id": 1,
+        "test_file": "tests/test_black.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "26c9465a22c732ab1e17b0dec578fa3432e9b558",
+        "fixed_commit_id": "c0a7582e3d4cc8bec3b7f5a6c52b36880dcb57d7"
+      }
+    },
+    {
+      "task_id": "cookiecutter_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/cookiecutter_1",
+      "goal": "Fix BugsInPy project 'cookiecutter' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_generate_context.py.",
+      "metadata": {
+        "project": "cookiecutter",
+        "bug_id": 1,
+        "test_file": "tests/test_generate_context.py",
+        "python_version": "3.6.9",
+        "buggy_commit_id": "c15633745df6abdb24e02746b82aadb20b8cdf8c",
+        "fixed_commit_id": "7f6804c4953a18386809f11faf4d86898570debc"
+      }
+    },
+    {
+      "task_id": "fastapi_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/fastapi_1",
+      "goal": "Fix BugsInPy project 'fastapi' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_jsonable_encoder.py.",
+      "metadata": {
+        "project": "fastapi",
+        "bug_id": 1,
+        "test_file": "tests/test_jsonable_encoder.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "766157bfb4e7dfccba09ab398e8ec444d14e947c",
+        "fixed_commit_id": "3397d4d69a9c2d64c1219fcbf291ea5697a4abb8"
+      }
+    },
+    {
+      "task_id": "httpie_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/httpie_1",
+      "goal": "Fix BugsInPy project 'httpie' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_downloads.py.",
+      "metadata": {
+        "project": "httpie",
+        "bug_id": 1,
+        "test_file": "tests/test_downloads.py",
+        "python_version": "3.7.3",
+        "buggy_commit_id": "001bda19450ad85c91345eea3cfa3991e1d492ba",
+        "fixed_commit_id": "5300b0b490b8db48fac30b5e32164be93dc574b7"
+      }
+    },
+    {
+      "task_id": "keras_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/keras_1",
+      "goal": "Fix BugsInPy project 'keras' bug 1 so the relevant tests pass. Relevant test file(s): tests/keras/initializers_test.py.",
+      "metadata": {
+        "project": "keras",
+        "bug_id": 1,
+        "test_file": "tests/keras/initializers_test.py",
+        "python_version": "3.7.3",
+        "buggy_commit_id": "331d5b0102ab0cc79cece1f03cc551d8105db3c9",
+        "fixed_commit_id": "8e23a3ec47a2ccbf6cdd222a80886c6b9f17264f"
+      }
+    },
+    {
+      "task_id": "luigi_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/luigi_1",
+      "goal": "Fix BugsInPy project 'luigi' bug 1 so the relevant tests pass. Relevant test file(s): test/server_test.py.",
+      "metadata": {
+        "project": "luigi",
+        "bug_id": 1,
+        "test_file": "test/server_test.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "1164eb6b85b8a70f596dbb99452bec513e72c12e",
+        "fixed_commit_id": "aec5dc2ed8db53fc282a0bd24aabe59031b6d1ba"
+      }
+    },
+    {
+      "task_id": "matplotlib_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/matplotlib_1",
+      "goal": "Fix BugsInPy project 'matplotlib' bug 1 so the relevant tests pass. Relevant test file(s): lib/matplotlib/tests/test_bbox_tight.py.",
+      "metadata": {
+        "project": "matplotlib",
+        "bug_id": 1,
+        "test_file": "lib/matplotlib/tests/test_bbox_tight.py",
+        "python_version": "3.8.1",
+        "buggy_commit_id": "c404d1f716e8aaefd4d7371ff49673e9c1f7f07c",
+        "fixed_commit_id": "5324adaec6a7fd3d78dea7b28451d5f6e95392a6"
+      }
+    },
+    {
+      "task_id": "pandas_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/pandas_1",
+      "goal": "Fix BugsInPy project 'pandas' bug 1 so the relevant tests pass. Relevant test file(s): pandas/tests/dtypes/test_dtypes.py.",
+      "metadata": {
+        "project": "pandas",
+        "bug_id": 1,
+        "test_file": "pandas/tests/dtypes/test_dtypes.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "3fd150c",
+        "fixed_commit_id": "e41ee47a90bb1d8a1fa28fcefcd45ed8ef5cb946"
+      }
+    },
+    {
+      "task_id": "sanic_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/sanic_1",
+      "goal": "Fix BugsInPy project 'sanic' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_blueprints.py.",
+      "metadata": {
+        "project": "sanic",
+        "bug_id": 1,
+        "test_file": "tests/test_blueprints.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "e7001b00747b659f7042b0534802b936ee8a53e0",
+        "fixed_commit_id": "44973125c15304b4262c51c78b5a86bd1daafa86"
+      }
+    },
+    {
+      "task_id": "scrapy_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/scrapy_1",
+      "goal": "Fix BugsInPy project 'scrapy' bug 1 so the relevant tests pass. Relevant test file(s): tests/test_spidermiddleware_offsite.py.",
+      "metadata": {
+        "project": "scrapy",
+        "bug_id": 1,
+        "test_file": "tests/test_spidermiddleware_offsite.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "c57512fa669e6f6b1b766a7639206a380f0d10ce",
+        "fixed_commit_id": "9d9dea0d69709ef0f7aef67ddba1bd7bda25d273"
+      }
+    },
+    {
+      "task_id": "spacy_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/spacy_1",
+      "goal": "Fix BugsInPy project 'spacy' bug 1 so the relevant tests pass. Relevant test file(s): spacy/tests/test_errors.py.",
+      "metadata": {
+        "project": "spacy",
+        "bug_id": 1,
+        "test_file": "spacy/tests/test_errors.py",
+        "python_version": "3.7.7",
+        "buggy_commit_id": "9ce059dd067ecc3f097d04023e3cfa0d70d35bb8",
+        "fixed_commit_id": "a987e9e45d4084f30964a4cec9914ae6ed25a73c"
+      }
+    },
+    {
+      "task_id": "thefuck_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/thefuck_1",
+      "goal": "Fix BugsInPy project 'thefuck' bug 1 so the relevant tests pass. Relevant test file(s): tests/rules/test_pip_unknown_command.py.",
+      "metadata": {
+        "project": "thefuck",
+        "bug_id": 1,
+        "test_file": "tests/rules/test_pip_unknown_command.py",
+        "python_version": "3.7.0",
+        "buggy_commit_id": "2ced7a7f33ae0bec3ffc7a43ce95330bdf6cfcb9",
+        "fixed_commit_id": "444908ce1c17767ef4aaf9e0b4950497914f7f63"
+      }
+    },
+    {
+      "task_id": "tornado_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/tornado_1",
+      "goal": "Fix BugsInPy project 'tornado' bug 1 so the relevant tests pass. Relevant test file(s): tornado/test/websocket_test.py.",
+      "metadata": {
+        "project": "tornado",
+        "bug_id": 1,
+        "test_file": "tornado/test/websocket_test.py",
+        "python_version": "3.7.0",
+        "buggy_commit_id": "6a5a0bfa370b6c0d3dbbf9589a560a98202d2baa",
+        "fixed_commit_id": "4677c54cc18bbfbdf0f4dadf11610fab6203fd63"
+      }
+    },
+    {
+      "task_id": "tqdm_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/tqdm_1",
+      "goal": "Fix BugsInPy project 'tqdm' bug 1 so the relevant tests pass. Relevant test file(s): tqdm/tests/tests_contrib.py.",
+      "metadata": {
+        "project": "tqdm",
+        "bug_id": 1,
+        "test_file": "tqdm/tests/tests_contrib.py",
+        "python_version": "3.6.9",
+        "buggy_commit_id": "8cc777fe8401a05d07f2c97e65d15e4460feab88",
+        "fixed_commit_id": "c0dcf39b046d1b4ff6de14ac99ad9a1b10487512"
+      }
+    },
+    {
+      "task_id": "youtube-dl_bug_1",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/youtube-dl_1",
+      "goal": "Fix BugsInPy project 'youtube-dl' bug 1 so the relevant tests pass. Relevant test file(s): test/test_utils.py.",
+      "metadata": {
+        "project": "youtube-dl",
+        "bug_id": 1,
+        "test_file": "test/test_utils.py",
+        "python_version": "3.7.0",
+        "buggy_commit_id": "99036a1298089068dcf80c0985bfcc3f8c24f281",
+        "fixed_commit_id": "1cc47c667419e0eadc0a6989256ab7b276852adf"
+      }
+    },
+    {
+      "task_id": "black_bug_2",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/black_2",
+      "goal": "Fix BugsInPy project 'black' bug 2 so the relevant tests pass. Relevant test file(s): tests/test_black.py.",
+      "metadata": {
+        "project": "black",
+        "bug_id": 2,
+        "test_file": "tests/test_black.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "c8ca6b2b9ff3510bee12129824cebfc2fc51e5b2",
+        "fixed_commit_id": "892eddacd215d685e136686b7f629ade70adca83"
+      }
+    },
+    {
+      "task_id": "pandas_bug_2",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/pandas_2",
+      "goal": "Fix BugsInPy project 'pandas' bug 2 so the relevant tests pass. Relevant test file(s): pandas/tests/indexing/test_scalar.py.",
+      "metadata": {
+        "project": "pandas",
+        "bug_id": 2,
+        "test_file": "pandas/tests/indexing/test_scalar.py",
+        "python_version": "3.8.3",
+        "buggy_commit_id": "2740fb4",
+        "fixed_commit_id": "55e8891f6d33be14e0db73ac06513129503f995c"
+      }
+    },
+    {
+      "task_id": "matplotlib_bug_2",
+      "repo": "/Users/justinbarry/projects/BugsInPy/workspace/matplotlib_2",
+      "goal": "Fix BugsInPy project 'matplotlib' bug 2 so the relevant tests pass. Relevant test file(s): lib/matplotlib/tests/test_axes.py.",
+      "metadata": {
+        "project": "matplotlib",
+        "bug_id": 2,
+        "test_file": "lib/matplotlib/tests/test_axes.py",
+        "python_version": "3.8.1",
+        "buggy_commit_id": "2a3707d9c3472b1a010492322b6946388d4989ae",
+        "fixed_commit_id": "d86cc2bab8183fd3288ed474e4dfd33e0f018908"
+      }
+    }
+  ]
+}

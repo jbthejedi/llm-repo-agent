@@ -215,6 +215,18 @@ poetry run repo-agent prefs \
   --max-workers 8 \
   --tool-protocol json
 
+poetry run repo-agent prefs \
+  --suite eval/suites/pref_cost_estimate_suite.json \
+  --rollouts 2 \
+  --out runs/test_deepseek_r1_qwen/json_tool_calling.jsonl \
+  --trace-dir runs/test_deepseek_r1_qwen \
+  --llm-provider together \
+  --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
+  --temperature 0.1 \
+  --seed 42 \
+  --max-workers 8 \
+  --tool-protocol json
+
 
 ##############################
 #### CALL SFT TOGETHER #######
@@ -223,7 +235,7 @@ poetry run python sft_finetune_quick.py \
   --dataset runs/instruction_tuning/sft_dataset.jsonl \
   --model Qwen/Qwen3-8B \
   --suffix qwen3-8b-sft-pilot \
-  --epochs 1 \
+  --epochs 3 \
   --batch-size max \
   --learning-rate 1e-5 \
   --lora \
@@ -232,8 +244,23 @@ poetry run python sft_finetune_quick.py \
   --wandb-name qwen3-8b-sft-json-tools \
   --wandb-api-key <key_here>
 
+poetry run python sft_finetune_quick.py \
+  --dataset runs/instruction_tuning/sft_dataset.jsonl \
+  --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
+  --suffix ds-r1-distilled-qwen-14b-sft-pilot \
+  --epochs 3 \
+  --batch-size max \
+  --learning-rate 1e-5 \
+  --lora \
+  --watch \
+  --wandb-project-name repo-agent-finetunes \
+  --wandb-name qwen3-8b-sft-json-tools \
+  --wandb-api-key 
 
+
+##############################
 #### TOGETHER DEPLOY ENDPOINT
+##############################
 poetry run together endpoints create \
   --model "justinbarrye_c24l/Qwen3-8B-qwen25-7b-it-json-tools-f30fe75b \
   --gpu h100 \

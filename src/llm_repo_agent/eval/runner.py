@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 import uuid
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -108,6 +110,7 @@ class EvalRunner:
     self.cfg = cfg or EvalConfig()
     self.llm_factory = llm_factory or self._default_llm_factory
     self.results: List[TaskResult] = []
+    self._results_lock = threading.Lock()
 
   def _default_llm_factory(self) -> LLM:
     return LLMFactory.build(LLMConfig(
@@ -201,7 +204,8 @@ class EvalRunner:
 
       task_result.duration_s = time.time() - start_time
 
-    self.results.append(task_result)
+    with self._results_lock:
+      self.results.append(task_result)
     return task_result
 
   def _count_from_trace(self, trace: Trace, run_id: str) -> Dict[str, Any]:
@@ -261,6 +265,39 @@ class EvalRunner:
         if task_result.error:
           print(f"[eval] Error: {task_result.error}")
 
+    return self.results
+
+  def run_suite_parallel(self, suite: EvalSuite, max_workers: int) -> List[TaskResult]:
+    """Run all tasks in a suite using a thread pool."""
+    self.results = []
+    results_by_idx: Dict[int, TaskResult] = {}
+
+    if self.cfg.progress:
+      print(f"[eval] Running in parallel with {max_workers} workers")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+      futures = {
+        executor.submit(self.run_task, task): idx
+        for idx, task in enumerate(suite.tasks)
+      }
+      for future in as_completed(futures):
+        idx = futures[future]
+        try:
+          result = future.result()
+        except Exception as exc:
+          # Should be rare because run_task catches most errors.
+          result = TaskResult(task_id=suite.tasks[idx].task_id, run_id="unknown", success=False, error=str(exc))
+        results_by_idx[idx] = result
+        if self.cfg.progress:
+          status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+          print(f"\n[eval] Task {result.task_id}: {status}")
+          print(f"[eval] Steps: {result.steps}, Tool calls: {result.tool_calls}")
+          print(f"[eval] Duration: {result.duration_s:.1f}s")
+          if result.error:
+            print(f"[eval] Error: {result.error}")
+
+    # Preserve original task order in results.
+    self.results = [results_by_idx[i] for i in range(len(suite.tasks)) if i in results_by_idx]
     return self.results
 
   def run_tasks(self, tasks: List[TaskSpec]) -> List[TaskResult]:
