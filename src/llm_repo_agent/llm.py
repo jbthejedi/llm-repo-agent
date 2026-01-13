@@ -341,7 +341,7 @@ class JsonToolLLM:
   """
   model: str = "gpt-4.1-mini"
   temperature: float = 0.0
-  max_output_tokens: int = 600
+  max_output_tokens: int = 2000
   base_url: str | None = None
   api_key: str | None = None
   seed: int | None = None

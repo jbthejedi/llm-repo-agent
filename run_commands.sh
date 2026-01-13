@@ -1,6 +1,25 @@
 #########################
 ### RUN EVAL SUITE SFT ##
 #########################
+# Run eval suite using Together Base Qwen model
+poetry run repo-agent eval \
+    --suite eval/suites/bugsinpy_pysnooper_suite.json \
+    --trace-dir runs/pysnooper_eval_qwen72b \
+    --report runs/pysnooper_eval_qwen72b/report.json \
+    --llm-provider together \
+    --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+    --tool-protocol json \
+    --max-iters 100 \
+    --no-sandbox
+poetry run repo-agent eval \
+    --suite eval/suites/bugsinpy_pysnooper_suite.json \
+    --trace-dir runs/pysnooper_eval_gpt \
+    --report runs/pysnooper_eval_gpt/report.json \
+    --llm-provider openai \
+    --model gpt-4.1-mini \
+    --tool-protocol json \
+    --max-iters 100 \
+    --no-sandbox
 
 # Run eval suite using Together Base Qwen model
 poetry run repo-agent eval \
@@ -155,6 +174,20 @@ poetry run repo-agent sft-extract \
 ##########################################
 #### TEST JSON TOOL CALLING (TEXT) #######
 ##########################################
+
+# Llama 4 Maverick
+ poetry run repo-agent prefs \
+  --suite eval/suites/pref_cost_estimate_suite.json \
+  --rollouts 1 \
+  --out runs/test_llama_3it_maverick/json_tool_calling.jsonl \
+  --trace-dir runs/test_llama_3it_maverick \
+  --llm-provider together \
+  --model meta-llama/Llama-3.3-70B-Instruct-Turbo \
+  --temperature 0.0 \
+  --seed 42 \
+  --max-workers 4 \
+  --tool-protocol json
+
  poetry run repo-agent prefs \
   --suite eval/suites/gcd.json \
   --rollouts 10 \

@@ -2,3 +2,5 @@
 - create sft dataset with more tasks (Defects4J, ManyBugs, Bugs.jar)
 - verify DeepSeek-R1-Distilled-Qwen-14B works sft/dpo/endpoint
 - after (after?) sft of model, estimate cost for generating dpo
+
+
