@@ -57,6 +57,12 @@ class LLMParseErrorPayload(TracePayload):
 
 
 @dataclass
+class LLMErrorPayload(TracePayload):
+  t: int
+  error: str
+
+
+@dataclass
 class LLMActionPayload(TracePayload):
   t: int
   raw: Any

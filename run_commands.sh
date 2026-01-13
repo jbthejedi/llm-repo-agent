@@ -78,9 +78,9 @@ poetry run repo-agent eval \
   --temperature 0.7 \
   --seed 42
 
-#########################
-########### SFT #########
-#########################
+########################################
+########### GENERATE SFT DATA #########
+########################################
 
 # Run DPO finetune command to create SFT dataset using qwen-72B
 # test
@@ -118,6 +118,18 @@ poetry run repo-agent eval \
   --temperature 0.1 \
   --seed 42 \
   --max-workers 8
+
+# DeepSeek-R1-Distill-Qwen-14B
+ poetry run repo-agent prefs \
+  --suite eval/suites/sft_finetune_task_suite.json \
+  --rollouts 1 \
+  --out runs/test_deepseek_r1_qwen/dpo_dataset_cost_est.jsonl \
+  --trace-dir runs/test_deepseek_r1_qwen \
+  --llm-provider together \
+  --model deepseek-ai/deepseek-r1-distill-qwen-14b \
+  --temperature 0.0 \
+  --seed 42 \
+  --max-workers 4
 
 #########################
 ## ESTIMATE COSTS #######
@@ -215,4 +227,19 @@ poetry run python sft_finetune_quick.py \
   --batch-size max \
   --learning-rate 1e-5 \
   --lora \
-  --watch
+  --watch \
+  --wandb-project-name repo-agent-finetunes \
+  --wandb-name qwen3-8b-sft-json-tools \
+  --wandb-api-key <key_here>
+
+
+#### TOGETHER DEPLOY ENDPOINT
+poetry run together endpoints create \
+  --model "justinbarrye_c24l/Qwen3-8B-qwen25-7b-it-json-tools-f30fe75b \
+  --gpu h100 \
+  --gpu-count 1 \
+  --min-replicas 1 \
+  --max-replicas 1 \
+  --display-name "qwen3-8b-sft" \
+  --no-prompt-cache \
+  --no-speculative-decoding

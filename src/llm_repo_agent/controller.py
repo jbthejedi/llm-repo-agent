@@ -27,6 +27,10 @@ class ActionController:
         if extra:
             parts.append(f"unexpected args: {', '.join(extra)}")
         msg = "Invalid tool args: " + "; ".join(parts)
+        note = f"{name}: {msg}"
+        note_event = DriverNoteEvent(note=note)
+        history.append_driver_note(note_event)
+        self.trace.log("driver_note", DriverNotePayload(t=t, note=note))
         res = ToolResult(ok=False, output=msg, meta={"tool": name, "missing": missing, "extra": extra})
         return self._record_result(name, args, res, history, t)
 

@@ -117,6 +117,13 @@ def main() -> None:
     # Optional: poll until done
     parser.add_argument("--watch", action="store_true", help="Poll job status until terminal.")
     parser.add_argument("--poll-seconds", type=int, default=10)
+    # Optional: Weights & Biases logging
+    parser.add_argument("--wandb-api-key", type=str, default=None,
+                        help="Weights & Biases API key (defaults to WANDB_API_KEY env var).")
+    parser.add_argument("--wandb-project-name", type=str, default=None,
+                        help="Weights & Biases project name.")
+    parser.add_argument("--wandb-name", type=str, default=None,
+                        help="Weights & Biases run name.")
 
     args = parser.parse_args()
 
@@ -157,6 +164,13 @@ def main() -> None:
         learning_rate=args.learning_rate,
         training_method="sft",
     )
+    wandb_api_key = args.wandb_api_key or os.environ.get("WANDB_API_KEY")
+    if wandb_api_key:
+        job_kwargs["wandb_api_key"] = wandb_api_key
+    if args.wandb_project_name:
+        job_kwargs["wandb_project_name"] = args.wandb_project_name
+    if args.wandb_name:
+        job_kwargs["wandb_name"] = args.wandb_name
     if args.lora:
         job_kwargs.update(
             lora=True,

@@ -13,6 +13,7 @@ from .trace import (
     DriverNotePayload,
     FinalPayload,
     LLMActionPayload,
+    LLMErrorPayload,
     LLMParseErrorPayload,
     LLMRequestPayload,
     LLMUsagePayload,
@@ -195,6 +196,10 @@ class RepoAgent:
         # Adapter failed to return a typed Action — log and surface as runtime error.
         self.trace.log("llm_parse_error", LLMParseErrorPayload(t=t, error=str(e), raw=getattr(self.llm, "_last_raw", None)),)
         raise RuntimeError("LLM adapter failed to produce a valid typed Action") from e
+      except Exception as e:
+        self._log_llm_usage(t, phase="action")
+        self.trace.log("llm_error", LLMErrorPayload(t=t, error=str(e)))
+        raise
 
       ##############################
       # PARSE ACTION
