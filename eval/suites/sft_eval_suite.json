@@ -1,0 +1,97 @@
+{
+  "name": "sft_eval_suite",
+  "description": "SFT evaluation suite (8 held-out QuixBugs tasks, 20% of 40)",
+  "defaults": {
+    "test_cmd": "python -m pytest -q"
+  },
+  "tasks": [
+    {
+      "task_id": "fix_kheapsort",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the kheapsort implementation in python_programs/kheapsort.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_kheapsort.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "sorting",
+        "expected_files": ["python_programs/kheapsort.py"]
+      }
+    },
+    {
+      "task_id": "fix_minimum_spanning_tree",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the minimum_spanning_tree implementation in python_programs/minimum_spanning_tree.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_minimum_spanning_tree.py",
+      "metadata": {
+        "difficulty": "hard",
+        "category": "graph",
+        "expected_files": ["python_programs/minimum_spanning_tree.py"]
+      }
+    },
+    {
+      "task_id": "fix_possible_change",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the possible_change implementation in python_programs/possible_change.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_possible_change.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "dp",
+        "expected_files": ["python_programs/possible_change.py"]
+      }
+    },
+    {
+      "task_id": "fix_shortest_paths",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the shortest_paths implementation in python_programs/shortest_paths.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_shortest_paths.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/shortest_paths.py"]
+      }
+    },
+    {
+      "task_id": "fix_shunting_yard",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the shunting_yard implementation in python_programs/shunting_yard.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_shunting_yard.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "stack",
+        "expected_files": ["python_programs/shunting_yard.py"]
+      }
+    },
+    {
+      "task_id": "fix_subsequences",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the subsequences implementation in python_programs/subsequences.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_subsequences.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "recursion",
+        "expected_files": ["python_programs/subsequences.py"]
+      }
+    },
+    {
+      "task_id": "fix_to_base",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the to_base implementation in python_programs/to_base.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_to_base.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/to_base.py"]
+      }
+    },
+    {
+      "task_id": "fix_wrap",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the wrap implementation in python_programs/wrap.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_wrap.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "strings",
+        "expected_files": ["python_programs/wrap.py"]
+      }
+    }
+  ]
+}

@@ -118,8 +118,8 @@ poetry run repo-agent eval \
   --test-policy on_write
 
  poetry run repo-agent prefs \
-  --suite eval/suites/gcd.json \
-  --rollouts 8 \
+  --suite eval/suites/sft_finetune_task_suite.json \
+  --rollouts 10 \
   --out runs/quixbugs_traces_teacher_gpt_41_mini/instruction_tuning.jsonl \
   --trace-dir runs/quixbugs_traces_teacher_gpt_41_mini \
   --llm-provider openai \
