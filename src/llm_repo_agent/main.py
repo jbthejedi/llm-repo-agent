@@ -92,8 +92,9 @@ def cmd_eval(args):
   )
 
   runner = eval_runner.EvalRunner(cfg=cfg)
-  if args.num_workers and args.num_workers > 1:
-    results = runner.run_suite_parallel(suite, max_workers=args.num_workers)
+  num_workers = getattr(args, "num_workers", 0) or 0
+  if num_workers > 1:
+    results = runner.run_suite_parallel(suite, max_workers=num_workers)
   else:
     results = runner.run_suite(suite)
 
@@ -184,6 +185,7 @@ def cmd_sft_extract(args):
       output_path=Path(args.output),
       require_success=args.require_success,
       require_valid_tool_ok=args.require_valid_tool_ok,
+      drop_post_fix_on_loop=args.drop_post_fix_on_loop,
       max_context_chars=args.max_context_chars,
       output_format=args.output_format,
       progress=not args.quiet,
@@ -383,6 +385,8 @@ def main():
                           help="Only include steps where tool_result.ok is True (default: True)")
   sft_parser.add_argument("--no-require-valid-tool-ok", dest="require_valid_tool_ok", action="store_false",
                           help="Include steps regardless of tool_result.ok")
+  sft_parser.add_argument("--drop-post-fix-on-loop", action="store_true", default=False,
+                          help="Stop emitting samples after a loop is detected (default: False)")
   sft_parser.add_argument("--max-context-chars", type=int, default=8000,
                           help="Max chars for tool output in context (default: 8000)")
   sft_parser.add_argument(

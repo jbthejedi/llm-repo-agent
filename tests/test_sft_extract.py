@@ -351,6 +351,154 @@ def test_sft_extract_native_preserves_tool_calls_and_tool_role(tmp_path):
     assert any(m["role"] == "assistant" and "tool_calls" in m for m in messages)
 
 
+def test_sft_extract_drop_post_fix_on_loop_stops_after_note(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix it"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "list_files",
+                    "args": {"rel_dir": ".", "max_files": 10},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "list_files", "obs": {"ok": True, "output": "a.py", "meta": {}}},
+        },
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix it"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "read_file",
+                    "args": {"rel_path": "a.py", "max_chars": 10},
+                }
+            },
+        },
+        {
+            "kind": "driver_note",
+            "payload": {"note": "Loop detected: change approach, inspect different evidence, then replan."},
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "read_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        drop_post_fix_on_loop=True,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert len(samples) == 1
+
+
+def test_sft_extract_keeps_steps_after_loop_when_disabled(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix it"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "list_files",
+                    "args": {"rel_dir": ".", "max_files": 10},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "list_files", "obs": {"ok": True, "output": "a.py", "meta": {}}},
+        },
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix it"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "read_file",
+                    "args": {"rel_path": "a.py", "max_chars": 10},
+                }
+            },
+        },
+        {
+            "kind": "driver_note",
+            "payload": {"note": "Loop detected: change approach, inspect different evidence, then replan."},
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "read_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        drop_post_fix_on_loop=False,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert len(samples) == 2
+
+
 def test_cmd_sft_extract_writes_output(tmp_path):
     trace_dir = tmp_path / "traces"
     trace_dir.mkdir()
@@ -385,6 +533,7 @@ def test_cmd_sft_extract_writes_output(tmp_path):
         output=str(output_path),
         require_success=True,
         require_valid_tool_ok=True,
+        drop_post_fix_on_loop=False,
         max_context_chars=8000,
         output_format="json",
         quiet=True,

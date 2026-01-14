@@ -172,6 +172,37 @@ We distinguish two training intents:
 1) **Protocol compliance SFT (cheapest, highest leverage early)**
 - We do **not** require the whole rollout to pass tests.
 - We keep “good prefix” steps as long as they satisfy step-level invariants above.
+<question>
+>><h4>Questions:</h4>
+>>What is a "good prefix" step? What is a prefix?
+
+>> > Answer (Codex):
+>> > - A **prefix** is the “beginning part” of a rollout trajectory: iterations `0..t` (the first few steps), before later steps happen.
+>> > - A “good prefix step” is a step early in the rollout where the action is still clean and useful, even if the rollout later degrades (loops, thrash, bad patch, etc.).
+>> >
+>> > Concretely in this plan, a “good prefix step” is one that satisfies the step-level invariants:
+>> > - valid JSON tool call (`type="tool_call"`) with allowed tool name + required args
+>> > - tool execution succeeded (`tool_result.ok == true`)
+>> > - not an obvious repeat/thrash step
+>> > - (once implemented) occurs **before** the first “Loop detected…” driver note
+>> >
+>> > This is why we can sometimes keep early steps from a rollout that eventually fails: early evidence-gathering calls can still be the right behavior to imitate.
+<question>
+>>><h4>Questions:</h4>
+>>> Does the current `sft-extract` code allow us to filter out postfixes once loop detected has occurred? That's what we're saying we should do, right?
+>>>
+>>> > Answer (Codex):
+>>> > - **No** — the current `repo-agent sft-extract` implementation does *not* look at `driver_note` events (including “Loop detected…”), so it can’t automatically “cut off” samples after loop detection.
+>>> > - Today it only filters on:
+>>> > > - rollout success (`--require-success`, default True), and
+>>> > > - per-step tool success (`--require-valid-tool-ok`, default True).
+>>> > - **Yes**, “drop postfix after loop detection” is exactly what we meant by the anti-thrash filter; it’s just a follow-up enhancement we’d add if the initial dataset contains too much thrash.
+>>> >
+>>> > Implementation-wise, it’s straightforward to add:
+>>> > - Track a `loop_detected = True` flag when a trace event `kind == "driver_note"` and the note contains `"Loop detected"`.
+>>> > - Once `loop_detected` is set, stop emitting further step samples for that run (or at least stop after the first occurrence).
+</question>
+</question><br><br>
 
 2) **Policy imitation SFT (closer to “solve QuixBugs”)**
 - Prefer to train on **successful rollouts** (tests pass) to avoid learning teacher mistakes.
