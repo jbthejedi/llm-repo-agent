@@ -103,52 +103,19 @@ poetry run repo-agent eval \
 
 # Run DPO finetune command to create SFT dataset using qwen-72B
 # test
+  # --suite eval/suites/sft_finetune_task_suite.json \
  poetry run repo-agent prefs \
   --suite eval/suites/gcd.json \
   --rollouts 10 \
-  --out runs/instruction_tuning_test_2/instruction_tuning_test.jsonl \
-  --trace-dir runs/instruction_tuning_test_2 \
+  --out runs/quixbugs_traces_teacher_qwen25_72b/instruction_tuning.jsonl \
+  --trace-dir runs/quixbugs_traces_teacher_qwen25_72b \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
-  --temperature 0.1 \
-  --seed 42 \
-  --max-workers 8
-
-# another test
- poetry run repo-agent prefs \
-  --suite eval/suites/gcd.json \
-  --rollouts 10 \
-  --out runs/instruction_tuning_test_3/instruction_tuning_test.jsonl \
-  --trace-dir runs/instruction_tuning_test_3 \
-  --llm-provider openai \
-  --model gpt-4.1-mini \
   --temperature 0.0 \
   --seed 42 \
-  --max-workers 8
-
-# Run DPO finetune command to create SFT dataset using gpt41mini
- poetry run repo-agent prefs \
-  --suite eval/suites/sft_finetune_task_suite.json \
-  --rollouts 3 \
-  --out runs/instruction_tuning/dpo_dataset_cost_est.jsonl \
-  --trace-dir runs/instruction_tuning \
-  --llm-provider openai \
-  --model "gpt-4.1-mini" \
-  --temperature 0.1 \
-  --seed 42 \
-  --max-workers 8
-
-# DeepSeek-R1-Distill-Qwen-14B
- poetry run repo-agent prefs \
-  --suite eval/suites/sft_finetune_task_suite.json \
-  --rollouts 1 \
-  --out runs/test_deepseek_r1_qwen/dpo_dataset_cost_est.jsonl \
-  --trace-dir runs/test_deepseek_r1_qwen \
-  --llm-provider together \
-  --model deepseek-ai/deepseek-r1-distill-qwen-14b \
-  --temperature 0.0 \
-  --seed 42 \
-  --max-workers 4
+  --max-workers 5 \
+  --tool-protocol json \
+  --test-policy on_write
 
 #########################
 ## ESTIMATE COSTS #######
