@@ -186,6 +186,8 @@ def cmd_sft_extract(args):
       require_success=args.require_success,
       require_valid_tool_ok=args.require_valid_tool_ok,
       drop_postfix_on_loop=args.drop_postfix_on_loop,
+      filter_write_file_targets=args.filter_write_file_targets,
+      require_root_list_files_first=args.require_root_list_files_first,
       max_context_chars=args.max_context_chars,
       output_format=args.output_format,
       progress=not args.quiet,
@@ -387,10 +389,23 @@ def main():
                           help="Include steps regardless of tool_result.ok")
   sft_parser.add_argument(
       "--drop-postfix-on-loop",
+      "--drop-post-fix-on-loop",
       dest="drop_postfix_on_loop",
       action="store_true",
       default=False,
       help="Stop emitting samples after a loop is detected (default: False)",
+  )
+  sft_parser.add_argument(
+      "--filter-write-file-targets",
+      action="store_true",
+      default=False,
+      help="Drop write_file samples that target test files or non-goal paths (default: False)",
+  )
+  sft_parser.add_argument(
+      "--require-root-list-files-first",
+      action="store_true",
+      default=False,
+      help="Only keep runs where the first tool call is list_files on '.' (default: False)",
   )
   sft_parser.add_argument("--max-context-chars", type=int, default=8000,
                           help="Max chars for tool output in context (default: 8000)")

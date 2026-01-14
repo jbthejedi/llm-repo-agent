@@ -351,6 +351,175 @@ def test_sft_extract_native_preserves_tool_calls_and_tool_role(tmp_path):
     assert any(m["role"] == "assistant" and "tool_calls" in m for m in messages)
 
 
+def test_sft_extract_filters_write_file_targets(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "sys"},
+                    {"role": "user", "content": "GOAL:\nFix in python_programs/gcd.py"},
+                ]
+            },
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "write_file",
+                    "args": {"rel_path": "python_programs/gcd.py", "content": "ok"},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "write_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "write_file",
+                    "args": {"rel_path": "tests/test_gcd.py", "content": "no"},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "write_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "write_file",
+                    "args": {"rel_path": "python_programs/other.py", "content": "no"},
+                }
+            },
+        },
+        {
+            "kind": "tool_result",
+            "payload": {"tool": "write_file", "obs": {"ok": True, "output": "ok", "meta": {}}},
+        },
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        filter_write_file_targets=True,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert len(samples) == 1
+    action = json.loads(samples[0]["messages"][-1]["content"])
+    assert action["args"]["rel_path"] == "python_programs/gcd.py"
+
+
+def test_sft_extract_requires_root_list_files_first(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "GOAL"}]},
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "list_files",
+                    "args": {"rel_dir": "python_programs", "max_files": 10},
+                }
+            },
+        },
+        {"kind": "tool_result", "payload": {"tool": "list_files", "obs": {"ok": True, "output": "a.py", "meta": {}}}},
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {"type": "tool_call", "name": "read_file", "args": {"rel_path": "a.py", "max_chars": 10}},
+            },
+        },
+        {"kind": "tool_result", "payload": {"tool": "read_file", "obs": {"ok": True, "output": "ok", "meta": {}}}},
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        require_root_list_files_first=True,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert samples == []
+
+
+def test_sft_extract_allows_root_list_files_first(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "GOAL"}]},
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "list_files",
+                    "args": {"rel_dir": ".", "max_files": 10},
+                }
+            },
+        },
+        {"kind": "tool_result", "payload": {"tool": "list_files", "obs": {"ok": True, "output": "a.py", "meta": {}}}},
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {"type": "tool_call", "name": "read_file", "args": {"rel_path": "a.py", "max_chars": 10}},
+            },
+        },
+        {"kind": "tool_result", "payload": {"tool": "read_file", "obs": {"ok": True, "output": "ok", "meta": {}}}},
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        require_root_list_files_first=True,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert len(samples) == 2
+
+
 def test_sft_extract_drop_postfix_on_loop_stops_after_note(tmp_path):
     trace_dir = tmp_path / "traces"
     trace_dir.mkdir()
@@ -534,6 +703,8 @@ def test_cmd_sft_extract_writes_output(tmp_path):
         require_success=True,
         require_valid_tool_ok=True,
         drop_postfix_on_loop=False,
+        filter_write_file_targets=False,
+        require_root_list_files_first=False,
         max_context_chars=8000,
         output_format="json",
         quiet=True,

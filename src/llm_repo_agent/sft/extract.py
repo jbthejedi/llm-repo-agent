@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -88,6 +89,9 @@ def _extract_steps(events: List[Dict[str, Any]], cfg: SFTExtractConfig) -> List[
     last_request_messages: Optional[List[Dict[str, Any]]] = None
     pending_action: Optional[Dict[str, Any]] = None
 
+    if cfg.require_root_list_files_first and not _first_tool_call_is_root_list_files(events):
+        return samples
+
     for evt in events:
         kind = evt.get("kind")
         payload = evt.get("payload", {})
@@ -127,6 +131,19 @@ def _extract_steps(events: List[Dict[str, Any]], cfg: SFTExtractConfig) -> List[
             if cfg.require_valid_tool_ok and ok is not True:
                 pending_action = None
                 continue
+
+            if cfg.filter_write_file_targets and pending_action["action"].get("name") == "write_file":
+                rel_path = (pending_action["action"].get("args") or {}).get("rel_path")
+                if not isinstance(rel_path, str):
+                    pending_action = None
+                    continue
+                if _is_test_path(rel_path):
+                    pending_action = None
+                    continue
+                target_path = _extract_goal_path(pending_action["messages"])
+                if target_path and _normalize_rel_path(rel_path) != _normalize_rel_path(target_path):
+                    pending_action = None
+                    continue
 
             context = _normalize_messages(pending_action["messages"], cfg.max_context_chars, cfg.output_format)
             if cfg.output_format == "native":
@@ -241,6 +258,75 @@ def _tool_call_message_from_action(action: Dict[str, Any]) -> Optional[Dict[str,
             }
         ],
     }
+
+
+def _first_tool_call_is_root_list_files(events: List[Dict[str, Any]]) -> bool:
+    action = _first_tool_call_action(events)
+    if not action:
+        return False
+    if not _is_valid_tool_call(action):
+        return False
+    if action.get("name") != "list_files":
+        return False
+    rel_dir = (action.get("args") or {}).get("rel_dir")
+    if not isinstance(rel_dir, str):
+        return False
+    rel_dir = rel_dir.strip()
+    return rel_dir in {".", "./", ""}
+
+
+def _first_tool_call_action(events: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    for evt in events:
+        if evt.get("kind") != "llm_action":
+            continue
+        payload = evt.get("payload", {})
+        action = payload.get("action") or payload.get("obj") or payload.get("raw")
+        if isinstance(action, dict) and action.get("type") == "tool_call":
+            return action
+    return None
+
+
+_GOAL_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\\.[A-Za-z0-9_]+")
+
+
+def _extract_goal_path(messages: List[Dict[str, Any]]) -> Optional[str]:
+    for msg in messages:
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content") or ""
+        if isinstance(content, str) and content.lstrip().startswith("[tool_result]"):
+            continue
+        text = str(content)
+        matches = _GOAL_PATH_RE.findall(text)
+        if not matches:
+            continue
+        for match in matches:
+            if "http" in match:
+                continue
+            if "/" in match:
+                return match
+        return matches[0]
+    return None
+
+
+def _normalize_rel_path(path: str) -> str:
+    path = path.strip()
+    while path.startswith("./"):
+        path = path[2:]
+    return path
+
+
+def _is_test_path(path: str) -> bool:
+    normalized = _normalize_rel_path(path)
+    lowered = normalized.lower()
+    if lowered.startswith("tests/") or "/tests/" in lowered:
+        return True
+    if "testcases" in lowered:
+        return True
+    name = Path(normalized).name.lower()
+    if name.startswith("test_") or name.endswith("_test.py"):
+        return True
+    return False
 
 
 def _is_valid_tool_call(action: Dict[str, Any]) -> bool:
