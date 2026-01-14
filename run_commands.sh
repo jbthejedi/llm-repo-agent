@@ -154,7 +154,9 @@ poetry run repo-agent sft-extract \
   --require-success \
   --drop-postfix-on-loop \
   --require-valid-tool-ok \
-  --max-context-chars 8000
+  --max-context-chars 8000 \
+  --filter-write-file-targets \
+  --require-root-list-files-first
 
 ##########################################
 #### TEST JSON TOOL CALLING (TEXT) #######
