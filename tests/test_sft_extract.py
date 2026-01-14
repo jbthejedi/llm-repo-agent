@@ -351,7 +351,7 @@ def test_sft_extract_native_preserves_tool_calls_and_tool_role(tmp_path):
     assert any(m["role"] == "assistant" and "tool_calls" in m for m in messages)
 
 
-def test_sft_extract_drop_post_fix_on_loop_stops_after_note(tmp_path):
+def test_sft_extract_drop_postfix_on_loop_stops_after_note(tmp_path):
     trace_dir = tmp_path / "traces"
     trace_dir.mkdir()
     trace_file = trace_dir / "run.jsonl"
@@ -416,7 +416,7 @@ def test_sft_extract_drop_post_fix_on_loop_stops_after_note(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
-        drop_post_fix_on_loop=True,
+        drop_postfix_on_loop=True,
         output_format="json",
         progress=False,
     )
@@ -490,7 +490,7 @@ def test_sft_extract_keeps_steps_after_loop_when_disabled(tmp_path):
         output_path=tmp_path / "out.jsonl",
         require_success=True,
         require_valid_tool_ok=True,
-        drop_post_fix_on_loop=False,
+        drop_postfix_on_loop=False,
         output_format="json",
         progress=False,
     )
@@ -533,7 +533,7 @@ def test_cmd_sft_extract_writes_output(tmp_path):
         output=str(output_path),
         require_success=True,
         require_valid_tool_ok=True,
-        drop_post_fix_on_loop=False,
+        drop_postfix_on_loop=False,
         max_context_chars=8000,
         output_format="json",
         quiet=True,

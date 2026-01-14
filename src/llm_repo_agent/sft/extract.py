@@ -93,7 +93,7 @@ def _extract_steps(events: List[Dict[str, Any]], cfg: SFTExtractConfig) -> List[
         payload = evt.get("payload", {})
 
         if kind == "driver_note":
-            if cfg.drop_post_fix_on_loop:
+            if cfg.drop_postfix_on_loop:
                 note = payload.get("note")
                 if isinstance(note, str) and "Loop detected" in note:
                     break

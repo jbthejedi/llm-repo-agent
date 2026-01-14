@@ -11,7 +11,7 @@ class SFTExtractConfig:
     output_path: Path
     require_success: bool = True
     require_valid_tool_ok: bool = True
-    drop_post_fix_on_loop: bool = False
+    drop_postfix_on_loop: bool = False
     max_context_chars: int = 8000
     include_recovery: bool = False
     output_format: str = "json"  # "json" | "native"

@@ -106,12 +106,12 @@ poetry run repo-agent eval \
   # --suite eval/suites/sft_finetune_task_suite.json \
  poetry run repo-agent prefs \
   --suite eval/suites/gcd.json \
-  --rollouts 10 \
+  --rollouts 8 \
   --out runs/quixbugs_traces_teacher_qwen25_72b/instruction_tuning.jsonl \
   --trace-dir runs/quixbugs_traces_teacher_qwen25_72b \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
-  --temperature 0.0 \
+  --temperature 0.2 \
   --seed 42 \
   --max-workers 5 \
   --tool-protocol json \
@@ -135,8 +135,11 @@ poetry run repo-agent estimate-cost \
 #### SFT EXTRACT DATA #######
 #############################
 poetry run repo-agent sft-extract \
-  --trace-dir runs/instruction_tuning_test_3 \
-  --output runs/instruction_tuning_test_3/sft_dataset.jsonl
+  --trace-dir runs/quixbugs_teacher_traces \
+  --output runs/instruction_tuning/quixbugs_tool_sft_train.jsonl \
+  --format json
+  --require-success \
+  --drop-post-fix-on-loop \
 
 ##########################################
 #### TEST JSON TOOL CALLING (TEXT) #######
