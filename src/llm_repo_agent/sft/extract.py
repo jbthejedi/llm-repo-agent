@@ -286,7 +286,7 @@ def _first_tool_call_action(events: List[Dict[str, Any]]) -> Optional[Dict[str, 
     return None
 
 
-_GOAL_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\\.[A-Za-z0-9_]+")
+_GOAL_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+")
 
 
 def _extract_goal_path(messages: List[Dict[str, Any]]) -> Optional[str]:
