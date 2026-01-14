@@ -537,6 +537,45 @@ def test_sft_extract_requires_root_list_files_first(tmp_path):
     assert samples == []
 
 
+def test_sft_extract_requires_root_list_files_first_requires_max_files(tmp_path):
+    trace_dir = tmp_path / "traces"
+    trace_dir.mkdir()
+    trace_file = trace_dir / "run.jsonl"
+
+    events = [
+        {
+            "kind": "llm_request",
+            "payload": {"messages": [{"role": "system", "content": "sys"}, {"role": "user", "content": "GOAL"}]},
+        },
+        {
+            "kind": "llm_action",
+            "payload": {
+                "action": {
+                    "type": "tool_call",
+                    "name": "list_files",
+                    "args": {"rel_dir": "."},
+                }
+            },
+        },
+        {"kind": "tool_result", "payload": {"tool": "list_files", "obs": {"ok": True, "output": "a.py", "meta": {}}}},
+        {"kind": "run_end", "payload": {"state": {"last_test": {"ok": True, "output": "ok"}}}},
+    ]
+    _write_trace(trace_file, events)
+
+    cfg = SFTExtractConfig(
+        trace_dir=trace_dir,
+        output_path=tmp_path / "out.jsonl",
+        require_success=True,
+        require_valid_tool_ok=True,
+        require_root_list_files_first=True,
+        output_format="json",
+        progress=False,
+    )
+
+    samples = extract_sft_samples(cfg)
+    assert samples == []
+
+
 def test_sft_extract_accepts_dot_slash_list_files_first(tmp_path):
     trace_dir = tmp_path / "traces"
     trace_dir.mkdir()
