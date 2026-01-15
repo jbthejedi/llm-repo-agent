@@ -43,11 +43,19 @@ def test_cmd_eval_passes_tool_protocol(monkeypatch, tmp_path):
     def fake_load_suite(path: Path):
         return SimpleNamespace(name="suite", description=None, tasks=[])
 
+    class DummyRolloutResults:
+        def __init__(self):
+            self.task_results = {}
+            self.rollouts_per_task = 1
+            self.total_tasks = 0
+        def all_results(self):
+            return []
+
     class DummyRunner:
         def __init__(self, **kwargs):
             captured["cfg"] = kwargs.get("cfg")
-        def run_suite(self, suite):
-            return []
+        def run_suite_with_rollouts(self, suite, rollouts, max_workers):
+            return DummyRolloutResults()
 
     monkeypatch.setattr(main.eval_tasks, "load_suite", fake_load_suite)
     monkeypatch.setattr(main.eval_runner, "EvalRunner", DummyRunner)

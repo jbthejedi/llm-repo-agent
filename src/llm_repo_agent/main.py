@@ -81,6 +81,7 @@ def cmd_eval(args):
   rollouts = getattr(args, "rollouts", 1) or 1
   temperature = getattr(args, "temperature", 0.0)
   base_seed = getattr(args, "seed", None)
+  num_workers = getattr(args, "num_workers", 0) or 0
 
   cfg = eval_runner.EvalConfig(
       trace_dir=Path(args.trace_dir),
@@ -99,20 +100,17 @@ def cmd_eval(args):
   )
 
   runner = eval_runner.EvalRunner(cfg=cfg)
-  num_workers = getattr(args, "num_workers", 0) or 0
 
+  # Unified approach: tasks × rollouts executed via ThreadPoolExecutor
+  rollout_results = runner.run_suite_with_rollouts(
+      suite, rollouts=rollouts, max_workers=num_workers
+  )
+  results = rollout_results.all_results()
+
+  # Use rollout-specific metrics only when actually doing multiple rollouts
   if rollouts > 1:
-    # Run with multiple rollouts per task
-    rollout_results = runner.run_suite_with_rollouts(
-        suite, rollouts=rollouts, max_workers=num_workers
-    )
-    results = rollout_results.all_results()
     metrics = eval_metrics.compute_metrics_with_rollouts(rollout_results)
-  elif num_workers > 1:
-    results = runner.run_suite_parallel(suite, max_workers=num_workers)
-    metrics = eval_metrics.compute_metrics(results)
   else:
-    results = runner.run_suite(suite)
     metrics = eval_metrics.compute_metrics(results)
 
   # Display metrics
