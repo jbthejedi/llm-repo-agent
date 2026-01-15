@@ -23,3 +23,18 @@ def test_system_prompt_requires_root_list_files_first():
 def test_system_prompt_requires_list_files_required_args():
     prompt = system_prompt("json")
     assert "list_files must include both rel_dir and max_files" in prompt
+
+
+def test_system_prompt_includes_write_rule():
+    """Verify WRITE RULE is present to prevent hallucinated changes."""
+    prompt = system_prompt("json")
+    assert "WRITE RULE:" in prompt
+    assert "MUST call write_file BEFORE using type='final'" in prompt
+    assert "Listing changes in the final output does NOT make changes" in prompt
+
+
+def test_system_prompt_native_also_includes_write_rule():
+    """WRITE RULE should be in native prompts too."""
+    prompt = system_prompt("native")
+    assert "WRITE RULE:" in prompt
+    assert "MUST call write_file BEFORE using type='final'" in prompt
