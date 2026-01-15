@@ -238,6 +238,18 @@ class RepoAgent:
       # HANDLE FINAL
       ##############################
       if isinstance(parsed_action, FinalAction):
+        # Validate that model didn't hallucinate changes without calling write_file
+        preliminary_summary = summarize_history(history, run_id=self.trace.run_id)
+        if parsed_action.changes and not preliminary_summary.files_touched:
+          # Model claimed changes but never wrote any files - reject and continue
+          note = "ERROR: You listed changes but never called write_file. You MUST call write_file to make changes before using type='final'. Try again."
+          note_event = DriverNoteEvent(note=note)
+          history.append_driver_note(note_event)
+          self.trace.log("driver_note", DriverNotePayload(t=t, note=note))
+          self.llm.add_driver_note(note)
+          self._p(f"[driver] iteration={t} rejected final with hallucinated changes")
+          last_tool_result = note
+          continue
 
         if self.cfg.test_policy == "on_final" and test_cmd and not tests_run_for_final:
           test_res, test_event = _run_and_record_tests(t)

@@ -105,13 +105,13 @@ poetry run repo-agent eval \
 # test
   # --suite eval/suites/sft_finetune_task_suite.json \
  poetry run repo-agent prefs \
-  --suite eval/suites/gcd.json \
-  --rollouts 8 \
+  --suite eval/suites/sft_finetune_task_suite.json \
+  --rollouts 10 \
   --out runs/quixbugs_traces_teacher_qwen25_72b/instruction_tuning.jsonl \
   --trace-dir runs/quixbugs_traces_teacher_qwen25_72b \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
-  --temperature 0.2 \
+  --temperature 0.1 \
   --seed 42 \
   --max-workers 5 \
   --tool-protocol json \
@@ -119,14 +119,14 @@ poetry run repo-agent eval \
 
  poetry run repo-agent prefs \
   --suite eval/suites/sft_finetune_task_suite.json \
-  --rollouts 10 \
+  --rollouts 11 \
   --out runs/quixbugs_traces_teacher_gpt_41_mini/instruction_tuning.jsonl \
   --trace-dir runs/quixbugs_traces_teacher_gpt_41_mini \
   --llm-provider openai \
   --model gpt-4.1-mini \
   --temperature 0.2 \
   --seed 42 \
-  --max-workers 5 \
+  --max-workers 4 \
   --tool-protocol json \
   --test-policy on_write
 

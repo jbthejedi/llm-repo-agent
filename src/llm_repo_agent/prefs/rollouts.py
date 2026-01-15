@@ -185,8 +185,31 @@ class PrefsRunner:
             status = "PASS" if result.task_result.success else (
                 "FAIL" if result.task_result.success is False else "N/A"
             )
+
+            # Determine failure reason for FAIL/N/A cases
+            reason = ""
+            if status in ("FAIL", "N/A"):
+                tr = result.task_result
+                if tr.error:
+                    err_lower = tr.error.lower()
+                    if "rate" in err_lower or "limit" in err_lower or "429" in err_lower:
+                        reason = " rate_limit"
+                    elif "parse" in err_lower or "json" in err_lower:
+                        reason = " json_parse_error"
+                    else:
+                        # Truncate error message for display
+                        reason = f" error:{tr.error[:40]}"
+                elif tr.steps >= self.cfg.max_iters:
+                    reason = " max_iters_reached"
+                elif tr.parse_errors > 0:
+                    reason = f" parse_errors:{tr.parse_errors}"
+                elif status == "FAIL" and tr.test_output:
+                    # Test failure - show first line of output
+                    first_line = tr.test_output.strip().split('\n')[0][:40]
+                    reason = f" test_fail:{first_line}"
+
             print(f"[prefs] [{self._completed_count}/{self._total_work_items}] "
-                  f"{item.task.task_id} seed={item.seed}: {status} "
+                  f"{item.task.task_id} seed={item.seed}: {status}{reason} "
                   f"(steps={result.task_result.steps})")
 
     def run_task_rollouts(self, task: TaskSpec, suite_name: str) -> Optional[tuple[PreferencePair, PreferenceMeta]]:

@@ -69,6 +69,11 @@ def system_prompt(tool_protocol: str = "native") -> str:
     "- Use type='final' ONLY when you can answer the goal with high confidence.",
     "- 'changes' should be [] if you made no file edits.",
     "",
+    "WRITE RULE:",
+    "- You MUST call write_file BEFORE using type='final' if you intend to make any changes.",
+    "- Listing changes in the final output does NOT make changes - only write_file does.",
+    "- If your final 'changes' array is non-empty, you MUST have called write_file first.",
+    "",
     "TOOLS:",
     json.dumps(PROMPT_TOOL_SPEC, indent=2),
   ]
