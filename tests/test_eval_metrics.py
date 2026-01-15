@@ -14,6 +14,7 @@ def _make_result(
     reflection_count: int = 0,
     parse_errors: int = 0,
     test_runs: int = 0,
+    valid_tool_actions: int = 0,
     metadata: dict = None,
 ) -> eval_runner.TaskResult:
     """Helper to create TaskResult objects for testing."""
@@ -28,6 +29,7 @@ def _make_result(
         reflection_count=reflection_count,
         parse_errors=parse_errors,
         test_runs=test_runs,
+        valid_tool_actions=valid_tool_actions,
         metadata=metadata or {},
     )
 
@@ -241,3 +243,282 @@ def test_format_metrics_summary_with_categories():
     assert "BY CATEGORY:" in summary
     assert "easy: 2/2 (100%)" in summary
     assert "hard: 1/3 (33%)" in summary
+
+
+# ============================================================
+# Tool Call Instruction Following Tests
+# ============================================================
+
+
+def test_compute_metrics_tool_parse_success_rate_all_valid():
+    """Test tool_parse_success_rate when all tool calls are valid."""
+    results = [
+        _make_result("t1", success=True, valid_tool_actions=5, parse_errors=0),
+        _make_result("t2", success=True, valid_tool_actions=3, parse_errors=0),
+    ]
+    metrics = eval_metrics.compute_metrics(results)
+
+    assert metrics.total_valid_tool_actions == 8
+    assert metrics.total_parse_errors == 0
+    assert metrics.tool_parse_success_rate == 1.0
+
+
+def test_compute_metrics_tool_parse_success_rate_mixed():
+    """Test tool_parse_success_rate with mixed valid/invalid tool calls."""
+    results = [
+        _make_result("t1", success=True, valid_tool_actions=8, parse_errors=2),
+        _make_result("t2", success=False, valid_tool_actions=6, parse_errors=4),
+    ]
+    metrics = eval_metrics.compute_metrics(results)
+
+    assert metrics.total_valid_tool_actions == 14
+    assert metrics.total_parse_errors == 6
+    # 14 / (14 + 6) = 14/20 = 0.7
+    assert metrics.tool_parse_success_rate == 0.7
+
+
+def test_compute_metrics_tool_parse_success_rate_all_errors():
+    """Test tool_parse_success_rate when all tool calls fail to parse."""
+    results = [
+        _make_result("t1", success=False, valid_tool_actions=0, parse_errors=5),
+    ]
+    metrics = eval_metrics.compute_metrics(results)
+
+    assert metrics.total_valid_tool_actions == 0
+    assert metrics.total_parse_errors == 5
+    assert metrics.tool_parse_success_rate == 0.0
+
+
+def test_compute_metrics_tool_parse_success_rate_no_tool_calls():
+    """Test tool_parse_success_rate when there are no tool call attempts."""
+    results = [
+        _make_result("t1", success=True, valid_tool_actions=0, parse_errors=0),
+    ]
+    metrics = eval_metrics.compute_metrics(results)
+
+    assert metrics.total_valid_tool_actions == 0
+    assert metrics.total_parse_errors == 0
+    # No attempts = 0% (default)
+    assert metrics.tool_parse_success_rate == 0.0
+
+
+def test_format_metrics_summary_includes_tool_instruction_following():
+    """Test format_metrics_summary includes tool call instruction following section."""
+    metrics = eval_metrics.EvalMetrics(
+        total_tasks=2,
+        passed=1,
+        failed=1,
+        success_rate=0.5,
+        total_valid_tool_actions=18,
+        total_parse_errors=2,
+        tool_parse_success_rate=0.9,
+    )
+    summary = eval_metrics.format_metrics_summary(metrics)
+
+    assert "TOOL CALL INSTRUCTION FOLLOWING:" in summary
+    assert "Valid tool actions:     18" in summary
+    assert "Parse errors:           2" in summary
+    assert "Tool parse success:     90.0%" in summary
+
+
+def test_task_result_includes_valid_tool_actions():
+    """Test TaskResult has valid_tool_actions field."""
+    result = eval_runner.TaskResult(
+        task_id="test",
+        run_id="run_test",
+        valid_tool_actions=10,
+    )
+    assert result.valid_tool_actions == 10
+    d = result.to_dict()
+    assert d["valid_tool_actions"] == 10
+
+
+# ============================================================
+# Rollout Metrics Tests
+# ============================================================
+
+
+def test_rollout_results_get_task_pass_rate():
+    """Test RolloutResults.get_task_pass_rate calculates correctly."""
+    task_results = {
+        "task1": [
+            _make_result("task1", success=True),
+            _make_result("task1", success=True),
+            _make_result("task1", success=False),
+        ],
+        "task2": [
+            _make_result("task2", success=False),
+            _make_result("task2", success=False),
+        ],
+    }
+    rollout_results = eval_runner.RolloutResults(
+        task_results=task_results,
+        rollouts_per_task=3,
+        total_tasks=2,
+    )
+
+    # task1: 2/3 = 66.7%
+    assert abs(rollout_results.get_task_pass_rate("task1") - 0.667) < 0.01
+    # task2: 0/2 = 0%
+    assert rollout_results.get_task_pass_rate("task2") == 0.0
+    # unknown task
+    assert rollout_results.get_task_pass_rate("unknown") == 0.0
+
+
+def test_rollout_results_get_task_summary():
+    """Test RolloutResults.get_task_summary returns correct breakdown."""
+    task_results = {
+        "task1": [
+            _make_result("task1", success=True),
+            _make_result("task1", success=False),
+            _make_result("task1", error="boom"),
+        ],
+    }
+    rollout_results = eval_runner.RolloutResults(
+        task_results=task_results,
+        rollouts_per_task=3,
+        total_tasks=1,
+    )
+
+    summary = rollout_results.get_task_summary("task1")
+    assert summary["passed"] == 1
+    assert summary["failed"] == 1
+    assert summary["errored"] == 1
+    assert summary["total"] == 3
+    assert summary["pass_rate"] == 0.5  # 1 passed / 2 tested
+
+
+def test_compute_metrics_with_rollouts_basic():
+    """Test compute_metrics_with_rollouts computes rollout-specific metrics."""
+    task_results = {
+        "task1": [
+            _make_result("task1", success=True, steps=2, tool_calls=3),
+            _make_result("task1", success=True, steps=3, tool_calls=4),
+        ],
+        "task2": [
+            _make_result("task2", success=True, steps=1, tool_calls=2),
+            _make_result("task2", success=False, steps=2, tool_calls=3),
+        ],
+    }
+    rollout_results = eval_runner.RolloutResults(
+        task_results=task_results,
+        rollouts_per_task=2,
+        total_tasks=2,
+    )
+
+    metrics = eval_metrics.compute_metrics_with_rollouts(rollout_results)
+
+    assert metrics.total_tasks == 2
+    assert metrics.rollouts_per_task == 2
+    assert metrics.total_attempts == 4
+    assert metrics.passed == 3
+    assert metrics.failed == 1
+    assert metrics.success_rate == 0.75  # 3/4
+
+
+def test_compute_metrics_with_rollouts_consistency():
+    """Test compute_metrics_with_rollouts tracks consistency correctly."""
+    task_results = {
+        "always_pass": [
+            _make_result("always_pass", success=True),
+            _make_result("always_pass", success=True),
+            _make_result("always_pass", success=True),
+        ],
+        "always_fail": [
+            _make_result("always_fail", success=False),
+            _make_result("always_fail", success=False),
+        ],
+        "mixed": [
+            _make_result("mixed", success=True),
+            _make_result("mixed", success=False),
+            _make_result("mixed", success=True),
+        ],
+    }
+    rollout_results = eval_runner.RolloutResults(
+        task_results=task_results,
+        rollouts_per_task=3,
+        total_tasks=3,
+    )
+
+    metrics = eval_metrics.compute_metrics_with_rollouts(rollout_results)
+
+    assert metrics.consistent_pass == 1  # always_pass
+    assert metrics.consistent_fail == 1  # always_fail
+    assert metrics.inconsistent == 1  # mixed
+
+
+def test_compute_metrics_with_rollouts_avg_task_pass_rate():
+    """Test compute_metrics_with_rollouts calculates avg_task_pass_rate correctly."""
+    task_results = {
+        # 100% pass rate
+        "task1": [_make_result("task1", success=True), _make_result("task1", success=True)],
+        # 50% pass rate
+        "task2": [_make_result("task2", success=True), _make_result("task2", success=False)],
+        # 0% pass rate
+        "task3": [_make_result("task3", success=False), _make_result("task3", success=False)],
+    }
+    rollout_results = eval_runner.RolloutResults(
+        task_results=task_results,
+        rollouts_per_task=2,
+        total_tasks=3,
+    )
+
+    metrics = eval_metrics.compute_metrics_with_rollouts(rollout_results)
+
+    # Average of 100%, 50%, 0% = 50%
+    assert abs(metrics.avg_task_pass_rate - 0.5) < 0.01
+
+
+def test_format_metrics_summary_with_rollouts():
+    """Test format_metrics_summary shows rollout-specific info."""
+    metrics = eval_metrics.EvalMetrics(
+        total_tasks=3,
+        passed=5,
+        failed=1,
+        rollouts_per_task=2,
+        total_attempts=6,
+        avg_task_pass_rate=0.833,
+        consistent_pass=2,
+        consistent_fail=0,
+        inconsistent=1,
+        per_task_results={
+            "task1": {"passed": 2, "total": 2, "pass_rate": 1.0},
+            "task2": {"passed": 2, "total": 2, "pass_rate": 1.0},
+            "task3": {"passed": 1, "total": 2, "pass_rate": 0.5},
+        },
+    )
+
+    summary = eval_metrics.format_metrics_summary(metrics)
+
+    assert "Tasks:           3" in summary
+    assert "Rollouts/task:   2" in summary
+    assert "Total attempts:  6" in summary
+    assert "Avg pass rate: 83.3%" in summary
+    assert "Always pass:   2/3" in summary
+    assert "Mixed:         1/3" in summary
+    assert "PER-TASK RESULTS:" in summary
+    assert "task1: 2/2 (100%)" in summary
+    assert "task3: 1/2 (50%)" in summary
+
+
+def test_format_metrics_summary_single_rollout_unchanged():
+    """Test format_metrics_summary still works for single rollout (no rollout info)."""
+    metrics = eval_metrics.EvalMetrics(
+        total_tasks=5,
+        passed=3,
+        failed=2,
+        success_rate=0.6,
+        rollouts_per_task=1,  # Single rollout
+    )
+
+    summary = eval_metrics.format_metrics_summary(metrics)
+
+    # Should use original format without rollout info
+    assert "Total tasks:     5" in summary
+    assert "Passed:          3" in summary
+    assert "Failed:          2" in summary
+    assert "Success rate:    60.0%" in summary
+    # Should NOT have rollout-specific sections
+    assert "Rollouts/task" not in summary
+    assert "Total attempts" not in summary
+    assert "Avg pass rate" not in summary

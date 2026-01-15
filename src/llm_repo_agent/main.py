@@ -78,12 +78,19 @@ def cmd_eval(args):
   if suite.description:
     print(f"[eval] Description: {suite.description}")
 
+  rollouts = getattr(args, "rollouts", 1) or 1
+  temperature = getattr(args, "temperature", 0.0)
+  base_seed = getattr(args, "seed", None)
+
   cfg = eval_runner.EvalConfig(
       trace_dir=Path(args.trace_dir),
       sandbox=args.sandbox,
       keep_sandbox=args.keep_sandbox,
       test_policy=args.test_policy,
       max_iters=args.max_iters,
+      rollouts=rollouts,
+      temperature=temperature,
+      base_seed=base_seed,
       model=args.model,
       llm_provider=args.llm_provider,
       together_api_key=args.together_api_key,
@@ -93,13 +100,22 @@ def cmd_eval(args):
 
   runner = eval_runner.EvalRunner(cfg=cfg)
   num_workers = getattr(args, "num_workers", 0) or 0
-  if num_workers > 1:
+
+  if rollouts > 1:
+    # Run with multiple rollouts per task
+    rollout_results = runner.run_suite_with_rollouts(
+        suite, rollouts=rollouts, max_workers=num_workers
+    )
+    results = rollout_results.all_results()
+    metrics = eval_metrics.compute_metrics_with_rollouts(rollout_results)
+  elif num_workers > 1:
     results = runner.run_suite_parallel(suite, max_workers=num_workers)
+    metrics = eval_metrics.compute_metrics(results)
   else:
     results = runner.run_suite(suite)
+    metrics = eval_metrics.compute_metrics(results)
 
-  # Compute and display metrics
-  metrics = eval_metrics.compute_metrics(results)
+  # Display metrics
   print("\n" + eval_metrics.format_metrics_summary(metrics))
 
   # Write report
@@ -113,6 +129,9 @@ def cmd_eval(args):
             "model": args.model or "auto",
             "provider": args.llm_provider,
             "sandbox": args.sandbox,
+            "rollouts": rollouts,
+            "temperature": temperature,
+            "seed": base_seed,
         },
     )
     eval_report.write_report(report, Path(args.report))
@@ -293,6 +312,9 @@ def main():
       help="When to run tests.",
   )
   eval_parser.add_argument("--max-iters", type=int, default=20, help="Max agent iterations per task")
+  eval_parser.add_argument("--rollouts", type=int, default=1, help="Number of rollouts per task (default: 1)")
+  eval_parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature (default: 0.0)")
+  eval_parser.add_argument("--seed", type=int, default=None, help="Base seed for reproducibility")
   eval_parser.add_argument("--model", type=str, default=None, help="Model to use (overrides OPENAI_MODEL env)")
   eval_parser.add_argument(
       "--tool-protocol",

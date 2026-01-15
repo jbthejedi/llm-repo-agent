@@ -58,6 +58,7 @@ class TaskResult:
   parse_errors: int = 0
   test_runs: int = 0
   tool_breakdown: Dict[str, int] = field(default_factory=dict)
+  valid_tool_actions: int = 0  # Successfully parsed tool_call actions
 
   def to_dict(self) -> Dict[str, Any]:
     return asdict(self)
@@ -73,6 +74,9 @@ class EvalConfig:
         keep_sandbox: Whether to keep sandbox after run.
         test_policy: When to run tests (on_write, on_final, never).
         max_iters: Maximum agent iterations per task.
+        rollouts: Number of rollouts per task.
+        temperature: Sampling temperature.
+        base_seed: Base seed for reproducibility (None for random).
         model: Model identifier to use.
         llm_provider: Provider backend ("openai" or "together").
         together_api_key: Optional Together API key override.
@@ -85,6 +89,9 @@ class EvalConfig:
   keep_sandbox: bool = False
   test_policy: str = "on_write"
   max_iters: int = 20
+  rollouts: int = 1
+  temperature: float = 0.0
+  base_seed: Optional[int] = None
   model: Optional[str] = None
   llm_provider: str = "openai"
   together_api_key: Optional[str] = None
@@ -192,6 +199,7 @@ class EvalRunner:
       task_result.parse_errors = metrics["parse_errors"]
       task_result.test_runs = metrics["test_runs"]
       task_result.tool_breakdown = metrics["tool_breakdown"]
+      task_result.valid_tool_actions = metrics["valid_tool_actions"]
 
     except Exception as e:
       task_result.error = str(e)
@@ -218,6 +226,7 @@ class EvalRunner:
         "parse_errors": 0,
         "test_runs": 0,
         "tool_breakdown": {},
+        "valid_tool_actions": 0,
     }
 
     for evt in trace.iter_run_events(run_id):
@@ -226,6 +235,10 @@ class EvalRunner:
 
       if kind == "llm_action":
         metrics["steps"] += 1
+        # Count valid tool_call actions for instruction following metrics
+        action = payload.get("action", {})
+        if action.get("type") == "tool_call":
+          metrics["valid_tool_actions"] += 1
       elif kind == "tool_result":
         metrics["tool_calls"] += 1
         tool_name = payload.get("tool", "")
@@ -304,3 +317,146 @@ class EvalRunner:
     """Run a list of tasks (convenience method)."""
     suite = EvalSuite(name="adhoc", tasks=tasks)
     return self.run_suite(suite)
+
+  def _create_llm_factory_with_seed(self, seed: int) -> Callable[[], LLM]:
+    """Create an LLM factory with a specific seed."""
+    def factory() -> LLM:
+      return LLMFactory.build(LLMConfig(
+          provider=self.cfg.llm_provider,
+          model=self.cfg.model,
+          together_api_key=self.cfg.together_api_key,
+          tool_protocol=self.cfg.tool_protocol,
+          temperature=self.cfg.temperature,
+          seed=seed,
+      ))
+    return factory
+
+  def run_task_with_seed(self, task: TaskSpec, seed: int) -> TaskResult:
+    """Run a single task with a specific seed."""
+    original_factory = self.llm_factory
+    self.llm_factory = self._create_llm_factory_with_seed(seed)
+    try:
+      return self.run_task(task)
+    finally:
+      self.llm_factory = original_factory
+
+  def run_suite_with_rollouts(
+      self,
+      suite: EvalSuite,
+      rollouts: int,
+      max_workers: int = 0,
+  ) -> "RolloutResults":
+    """Run all tasks in a suite with multiple rollouts per task.
+
+    Args:
+        suite: Evaluation suite to run.
+        rollouts: Number of rollouts per task.
+        max_workers: Number of parallel threads (0 = sequential).
+
+    Returns:
+        RolloutResults containing all results grouped by task.
+    """
+    from collections import defaultdict
+
+    task_results: Dict[str, List[TaskResult]] = defaultdict(list)
+
+    # Generate work items: (task, seed) pairs
+    work_items = []
+    for task_idx, task in enumerate(suite.tasks):
+      for rollout_idx in range(rollouts):
+        seed = (self.cfg.base_seed or 0) + task_idx * rollouts + rollout_idx
+        work_items.append((task, seed, rollout_idx))
+
+    if self.cfg.progress:
+      total = len(suite.tasks) * rollouts
+      print(f"[eval] Running {len(suite.tasks)} tasks x {rollouts} rollouts = {total} total runs")
+
+    if max_workers > 1:
+      # Parallel execution
+      completed = 0
+      with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(self.run_task_with_seed, task, seed): (task, rollout_idx)
+            for task, seed, rollout_idx in work_items
+        }
+        for future in as_completed(futures):
+          task, rollout_idx = futures[future]
+          try:
+            result = future.result()
+          except Exception as exc:
+            result = TaskResult(
+                task_id=task.task_id,
+                run_id="unknown",
+                success=False,
+                error=str(exc),
+                metadata=task.metadata,
+            )
+          task_results[task.task_id].append(result)
+          completed += 1
+          if self.cfg.progress:
+            status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+            print(f"[eval] [{completed}/{len(work_items)}] {task.task_id} rollout {rollout_idx+1}: {status}")
+    else:
+      # Sequential execution
+      for i, (task, seed, rollout_idx) in enumerate(work_items):
+        if self.cfg.progress:
+          print(f"\n[eval] [{i+1}/{len(work_items)}] Task: {task.task_id}, rollout {rollout_idx+1}")
+        result = self.run_task_with_seed(task, seed)
+        task_results[task.task_id].append(result)
+        if self.cfg.progress:
+          status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+          print(f"[eval] Result: {status}, Steps: {result.steps}, Duration: {result.duration_s:.1f}s")
+
+    # Build flat results list for backward compatibility
+    self.results = []
+    for task in suite.tasks:
+      self.results.extend(task_results[task.task_id])
+
+    return RolloutResults(
+        task_results=dict(task_results),
+        rollouts_per_task=rollouts,
+        total_tasks=len(suite.tasks),
+    )
+
+
+@dataclass
+class RolloutResults:
+  """Results from running a suite with multiple rollouts per task."""
+  task_results: Dict[str, List[TaskResult]]  # task_id -> list of results
+  rollouts_per_task: int
+  total_tasks: int
+
+  def get_task_pass_rate(self, task_id: str) -> float:
+    """Get the pass rate for a specific task."""
+    results = self.task_results.get(task_id, [])
+    if not results:
+      return 0.0
+    passed = sum(1 for r in results if r.success is True)
+    tested = sum(1 for r in results if r.success is not None and r.error is None)
+    return passed / tested if tested > 0 else 0.0
+
+  def get_task_summary(self, task_id: str) -> Dict[str, Any]:
+    """Get a summary of results for a specific task."""
+    results = self.task_results.get(task_id, [])
+    passed = sum(1 for r in results if r.success is True)
+    failed = sum(1 for r in results if r.success is False and r.error is None)
+    errored = sum(1 for r in results if r.error)
+    no_tests = sum(1 for r in results if r.success is None and r.error is None)
+    total = len(results)
+    tested = passed + failed
+    return {
+        "task_id": task_id,
+        "passed": passed,
+        "failed": failed,
+        "errored": errored,
+        "no_tests": no_tests,
+        "total": total,
+        "pass_rate": passed / tested if tested > 0 else 0.0,
+    }
+
+  def all_results(self) -> List[TaskResult]:
+    """Get all results as a flat list."""
+    results = []
+    for task_results in self.task_results.values():
+      results.extend(task_results)
+    return results

@@ -13,17 +13,27 @@ poetry run repo-agent eval \
     --no-sandbox
 
 # Run eval suite using DPO finetuned model
-# endpoint_id: justinbarrye_c241/Qwen2.5-7B-Instruct-dpo-lora-4bf2fea2-4d8be882
-TOGETHER_API_KEY=<key_here> poetry run repo-agent eval \
-    --suite eval/suites/gcd.json \
-    --trace-dir runs/sft_evaluation \
-    --report runs/sft_evaluation/report.json \
+poetry run repo-agent eval \
+    --suite eval/suites/my_suite.json \
+    --trace-dir runs/qwen25_7b_it \
+    --report runs/qwen25_7b_it/report.json \
     --llm-provider together \
-    --model justinbarrye_c241/Qwen2.5-7B-qwen25-7b-sft-pilot-0e816e5e-2857697d \
-    --tool-protocol json
+    --model Qwen/Qwen2.5-7B-Instruct-Turbo \
+    --tool-protocol json \
+    --rollouts 5
+
+# justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84
+poetry run repo-agent eval \
+    --suite eval/suites/my_suite.json \
+    --trace-dir runs/qwen25_7b_it_sft \
+    --report runs/qwen25_7b_it_sft/report.json \
+    --llm-provider together \
+    --model justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84 \
+    --tool-protocol json \
+    --rollouts 5
 
 #########################
-######GEN DPO DATA ######
+###### GEN DPO DATA ######
 #########################
 
 # DPO finetune
@@ -59,8 +69,8 @@ TOGETHER_API_KEY=<key_here> poetry run repo-agent eval \
  poetry run repo-agent prefs \
   --suite eval/suites/sft_finetune_task_suite.json \
   --rollouts 10 \
-  --out runs/quixbugs_traces_teacher_qwen25_72b/instruction_tuning.jsonl \
-  --trace-dir runs/quixbugs_traces_teacher_qwen25_72b \
+  --out runs/test_sanity/instruction_tuning.jsonl \
+  --trace-dir runs/test_sanity \
   --llm-provider together \
   --model Qwen/Qwen2.5-72B-Instruct-Turbo \
   --temperature 0.2 \
@@ -70,15 +80,29 @@ TOGETHER_API_KEY=<key_here> poetry run repo-agent eval \
   --test-policy on_write
 
  poetry run repo-agent prefs \
-  --suite eval/suites/.json \
-  --rollouts 11 \
-  --out runs//instruction_tuning.jsonl \
-  --trace-dir runs/\
-  --llm-provider openai \
-  --model gpt-4.1-mini \
+  --suite eval/suites/my_suite.json \
+  --rollouts 5 \
+  --out runs/test_qwen25_7b_it/instruction_tuning.jsonl \
+  --trace-dir runs/test_qwen25_7b_it \
+  --llm-provider together \
+  --model Qwen/Qwen2.5-7B-Instruct-Turbo \
   --temperature 0.0 \
   --seed 42 \
-  --max-workers 1 \
+  --max-workers 5 \
+  --tool-protocol json \
+  --test-policy on_write
+
+# justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84
+ poetry run repo-agent prefs \
+  --suite eval/suites/sft_eval_suite.json \
+  --rollouts 5 \
+  --out runs/test_gcd/instruction_tuning.jsonl \
+  --trace-dir runs/test_gcd \
+  --llm-provider together \
+  --model justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84 \
+  --temperature 0.0 \
+  --seed 42 \
+  --max-workers 3 \
   --tool-protocol json \
   --test-policy on_write
 
