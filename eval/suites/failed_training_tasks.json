@@ -1,0 +1,86 @@
+{
+  "name": "failed_training_tasks",
+  "description": "Subset of QuixBugs tasks that were failing during training data generation",
+  "defaults": {
+    "test_cmd": "python -m pytest -q"
+  },
+  "tasks": [
+    {
+      "task_id": "fix_is_valid_parenthesization",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the is_valid_parenthesization implementation in python_programs/is_valid_parenthesization.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_is_valid_parenthesization.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "stack",
+        "expected_files": ["python_programs/is_valid_parenthesization.py"]
+      }
+    },
+    {
+      "task_id": "fix_get_factors",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the get_factors implementation in python_programs/get_factors.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_get_factors.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/get_factors.py"]
+      }
+    },
+    {
+      "task_id": "fix_find_in_sorted",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the find_in_sorted implementation in python_programs/find_in_sorted.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_find_in_sorted.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "search",
+        "expected_files": ["python_programs/find_in_sorted.py"]
+      }
+    },
+    {
+      "task_id": "fix_topological_ordering",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the topological_ordering implementation in python_programs/topological_ordering.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_topological_ordering.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/topological_ordering.py"]
+      }
+    },
+    {
+      "task_id": "fix_next_permutation",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the next_permutation implementation in python_programs/next_permutation.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_next_permutation.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "arrays",
+        "expected_files": ["python_programs/next_permutation.py"]
+      }
+    },
+    {
+      "task_id": "fix_levenshtein",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the levenshtein implementation in python_programs/levenshtein.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_levenshtein.py",
+      "metadata": {
+        "difficulty": "medium",
+        "category": "strings",
+        "expected_files": ["python_programs/levenshtein.py"]
+      }
+    },
+    {
+      "task_id": "fix_gcd",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the gcd implementation in python_programs/gcd.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_gcd.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/gcd.py"]
+      }
+    }
+  ]
+}

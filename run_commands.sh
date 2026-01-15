@@ -118,10 +118,10 @@ poetry run repo-agent eval \
   --test-policy on_write
 
  poetry run repo-agent prefs \
-  --suite eval/suites/topological_ordering.json \
-  --rollouts 10 \
-  --out runs/to_traces_teacher_gpt_41_mini/instruction_tuning.jsonl \
-  --trace-dir runs/to_traces_teacher_gpt_41_mini \
+  --suite eval/suites/.json \
+  --rollouts 11 \
+  --out runs//instruction_tuning.jsonl \
+  --trace-dir runs/\
   --llm-provider openai \
   --model gpt-4.1-mini \
   --temperature 0.0 \
@@ -148,8 +148,8 @@ poetry run repo-agent estimate-cost \
 #### SFT EXTRACT DATA #######
 #############################
 poetry run repo-agent sft-extract \
-  --trace-dir runs/quixbugs_traces_teacher_gpt_41_mini \
-  --output runs/quixbugs_traces_teacher_gpt_41_mini/quixbugs_tool_sft_train.jsonl \
+  --trace-dir runs/quixbugs_traces_teacher_qwen25_72b \
+  --output runs/quixbugs_traces_teacher_qwen25_72b/quixbugs_tool_sft_train.jsonl \
   --format json \
   --require-success \
   --drop-postfix-on-loop \

@@ -8,12 +8,12 @@
     {
       "task_id": "fix_topological_ordering",
       "repo": "~/projects/QuixBugs",
-      "goal": "Fix the gcd implementation in python_programs/gcd.py so that the tests pass",
-      "test_cmd": "python -m pytest -q python_testcases/test_gcd.py",
+      "goal": "Fix the topological_ordering implementation in python_programs/topological_ordering.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_topological_ordering.py",
       "metadata": {
-        "difficulty": "easy",
-        "category": "math",
-        "expected_files": ["python_programs/gcd.py"]
+        "difficulty": "medium",
+        "category": "graph",
+        "expected_files": ["python_programs/topological_ordering.py"]
       }
     }
   ]
