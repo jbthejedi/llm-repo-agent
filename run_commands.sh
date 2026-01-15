@@ -4,15 +4,6 @@
 # Run eval suite using Together Base Qwen model
 poetry run repo-agent eval \
     --suite eval/suites/bugsinpy_pysnooper_suite.json \
-    --trace-dir runs/pysnooper_eval_qwen72b \
-    --report runs/pysnooper_eval_qwen72b/report.json \
-    --llm-provider together \
-    --model Qwen/Qwen2.5-72B-Instruct-Turbo \
-    --tool-protocol json \
-    --max-iters 100 \
-    --no-sandbox
-poetry run repo-agent eval \
-    --suite eval/suites/bugsinpy_pysnooper_suite.json \
     --trace-dir runs/pysnooper_eval_gpt \
     --report runs/pysnooper_eval_gpt/report.json \
     --llm-provider openai \
@@ -21,54 +12,15 @@ poetry run repo-agent eval \
     --max-iters 100 \
     --no-sandbox
 
-# Run eval suite using Together Base Qwen model
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/my_eval_6 \
-    --report runs/my_eval_6/report.json \
-    --llm-provider together \
-    --model Qwen/Qwen2.5-72B-Instruct-Turbo 
-
-# Use Qwen2.5 7B
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/test_qwen_7b \
-    --report runs/test_qwen_7b/report.json \
-    --llm-provider together \
-    --model Qwen/Qwen2.5-7B-Instruct-Turbo 
-
-# meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/test_llama_31_8b_it \
-    --report runs/test_llama_31_8b_it/report.json \
-    --llm-provider together \
-    --model meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo
-
-# LLama 4 scout
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/llama_4_scout \
-    --report runs/llama_4_scout/report.json \
-    --llm-provider together \
-    --model meta-llama/Llama-4-Scout-17B-16E-Instruct
-
-# Deepseek distilled
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/deepseek_r1 \
-    --report runs/deepseek_r1/report.json \
-    --llm-provider together \
-    --model deepseek-ai/DeepSeek-R1-0528-tput
-
 # Run eval suite using DPO finetuned model
 # endpoint_id: justinbarrye_c241/Qwen2.5-7B-Instruct-dpo-lora-4bf2fea2-4d8be882
-poetry run repo-agent eval \
-    --suite eval/suites/my_suite.json \
-    --trace-dir runs/my_eval_6 \
-    --report runs/my_eval_6/report.json \
+TOGETHER_API_KEY=<key_here> poetry run repo-agent eval \
+    --suite eval/suites/gcd.json \
+    --trace-dir runs/sft_evaluation \
+    --report runs/sft_evaluation/report.json \
     --llm-provider together \
-    --model justinbarrye_c241/Qwen2.5-7B-Instruct-dpo-lora-4bf2fea2-4d8be882
+    --model justinbarrye_c241/Qwen2.5-7B-qwen25-7b-sft-pilot-0e816e5e-2857697d \
+    --tool-protocol json
 
 #########################
 ######GEN DPO DATA ######
@@ -252,31 +204,19 @@ poetry run repo-agent prefs \
 #### CALL SFT TOGETHER #######
 ##############################
 poetry run python sft_finetune_quick.py \
-  --dataset runs/instruction_tuning/sft_dataset.jsonl \
-  --model Qwen/Qwen3-8B \
-  --suffix qwen3-8b-sft-pilot \
+  --dataset runs/quixbugs_traces_teacher_qwen25_72b/quixbugs_tool_sft_train.jsonl \
+  --model Qwen/Qwen2.5-7B \
+  --suffix qwen25-7b-sft-pilot-2 \
   --epochs 3 \
-  --batch-size max \
-  --learning-rate 1e-5 \
+  --batch-size 8 \
+  --warmup-ratio 0.05 \
+  --max-grad-norm 1.0 \
+  --train-on-inputs auto \
+  --learning-rate 5e-6 \
   --lora \
   --watch \
   --wandb-project-name repo-agent-finetunes \
-  --wandb-name qwen3-8b-sft-json-tools \
-  --wandb-api-key <key_here>
-
-poetry run python sft_finetune_quick.py \
-  --dataset runs/instruction_tuning/sft_dataset.jsonl \
-  --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
-  --suffix ds-r1-distilled-qwen-14b-sft-pilot \
-  --epochs 3 \
-  --batch-size max \
-  --learning-rate 1e-5 \
-  --lora \
-  --watch \
-  --wandb-project-name repo-agent-finetunes \
-  --wandb-name qwen3-8b-sft-json-tools \
-  --wandb-api-key 
-
+  --wandb-name qwen25-7b-sft-json-tools-2
 
 ##############################
 #### TOGETHER DEPLOY ENDPOINT

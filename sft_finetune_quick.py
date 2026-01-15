@@ -62,6 +62,17 @@ def _parse_batch_size(value: str) -> int | str:
     return parsed
 
 
+def _parse_train_on_inputs(value: str) -> bool | str:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "y"}:
+        return True
+    if normalized in {"false", "0", "no", "n"}:
+        return False
+    if normalized == "auto":
+        return "auto"
+    raise ValueError("train-on-inputs must be one of: auto, true, false.")
+
+
 def _validate_message(msg: Dict[str, Any]) -> None:
     if not isinstance(msg, dict):
         raise ValueError("Each message must be an object.")
@@ -105,6 +116,31 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch-size", type=str, default="max", help='Integer or "max".')
     parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument(
+        "--warmup-ratio",
+        type=float,
+        default=None,
+        help="Warmup ratio (fraction of training steps), e.g. 0.05. If omitted, provider default is used.",
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=None,
+        help="Max gradient norm for clipping, e.g. 1.0. If omitted, provider default is used.",
+    )
+    parser.add_argument(
+        "--train-on-inputs",
+        type=str,
+        default=None,
+        help="Whether to compute loss on user/input tokens: auto|true|false (if omitted, provider default is used).",
+    )
+    parser.add_argument(
+        "--learning-rate-scheduler-type",
+        dest="learning_rate_scheduler_type",
+        type=str,
+        default=None,
+        help="Learning rate scheduler type (provider-dependent), e.g. linear|cosine (if omitted, provider default is used).",
+    )
 
     # LoRA knobs
     parser.add_argument("--lora", action=argparse.BooleanOptionalAction, default=True,
@@ -128,8 +164,8 @@ def main() -> None:
     args = parser.parse_args()
 
     load_dotenv()
-    api_key = os.environ.get("TOGETHER_API_KEY")
-    if not api_key:
+    together_api_key = os.environ.get("TOGETHER_API_KEY")
+    if not together_api_key:
         raise RuntimeError("Set TOGETHER_API_KEY in your environment.")
 
     try:
@@ -149,7 +185,7 @@ def main() -> None:
             break
         _validate_example(ex)
 
-    client = Together(api_key=api_key)
+    client = Together(api_key=together_api_key)
     uploaded = client.files.upload(file=str(dataset_path))
     training_file_id = uploaded.id
 
@@ -164,6 +200,18 @@ def main() -> None:
         learning_rate=args.learning_rate,
         training_method="sft",
     )
+    if args.warmup_ratio is not None:
+        if not (0.0 <= args.warmup_ratio <= 1.0):
+            raise ValueError("--warmup-ratio must be between 0.0 and 1.0")
+        job_kwargs["warmup_ratio"] = args.warmup_ratio
+    if args.max_grad_norm is not None:
+        if args.max_grad_norm <= 0:
+            raise ValueError("--max-grad-norm must be positive")
+        job_kwargs["max_grad_norm"] = args.max_grad_norm
+    if args.train_on_inputs is not None:
+        job_kwargs["train_on_inputs"] = _parse_train_on_inputs(args.train_on_inputs)
+    if args.learning_rate_scheduler_type is not None:
+        job_kwargs["learning_rate_scheduler_type"] = args.learning_rate_scheduler_type
     wandb_api_key = args.wandb_api_key or os.environ.get("WANDB_API_KEY")
     if wandb_api_key:
         job_kwargs["wandb_api_key"] = wandb_api_key
