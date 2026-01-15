@@ -1,0 +1,20 @@
+{
+  "name": "example_suite",
+  "description": "Example evaluation suite for testing the eval harness",
+  "defaults": {
+    "test_cmd": "python -m pytest -q"
+  },
+  "tasks": [
+    {
+      "task_id": "fix_topological_ordering",
+      "repo": "~/projects/QuixBugs",
+      "goal": "Fix the gcd implementation in python_programs/gcd.py so that the tests pass",
+      "test_cmd": "python -m pytest -q python_testcases/test_gcd.py",
+      "metadata": {
+        "difficulty": "easy",
+        "category": "math",
+        "expected_files": ["python_programs/gcd.py"]
+      }
+    }
+  ]
+}
