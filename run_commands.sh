@@ -20,7 +20,9 @@ poetry run repo-agent eval \
     --llm-provider together \
     --model Qwen/Qwen2.5-7B-Instruct-Turbo \
     --tool-protocol json \
-    --rollouts 5
+    --rollouts 5 \
+    --num-workers 5 \
+    --print-mode standard
 
 # justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84
 poetry run repo-agent eval \

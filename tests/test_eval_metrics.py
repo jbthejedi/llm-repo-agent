@@ -302,6 +302,33 @@ def test_compute_metrics_tool_parse_success_rate_no_tool_calls():
     assert metrics.tool_parse_success_rate == 0.0
 
 
+def test_compute_metrics_counts_error_messages_as_parse_errors():
+    """Test that errors with parse-related messages are counted as parse errors."""
+    results = [
+        # Normal success
+        _make_result("t1", success=True, valid_tool_actions=5, parse_errors=0),
+        # Error that looks like a parse error (LLM returned invalid JSON)
+        _make_result("t2", error="LLM adapter failed to produce a valid type", parse_errors=0),
+        # Another parse-like error
+        _make_result("t3", error="JSON decode error: unexpected token", parse_errors=0),
+        # Regular error (not a parse error)
+        _make_result("t4", error="Connection timeout", parse_errors=0),
+        # Task with actual parse_errors field set
+        _make_result("t5", success=False, valid_tool_actions=3, parse_errors=2),
+    ]
+    metrics = eval_metrics.compute_metrics(results)
+
+    assert metrics.errored == 3  # t2, t3, t4
+    assert metrics.passed == 1  # t1
+    assert metrics.failed == 1  # t5
+    # parse_errors: 2 from t5's field + 2 from error messages (t2, t3)
+    assert metrics.total_parse_errors == 4
+    # valid_tool_actions: 5 from t1 + 3 from t5 = 8
+    assert metrics.total_valid_tool_actions == 8
+    # tool_parse_success_rate: 8 / (8 + 4) = 8/12 = 0.667
+    assert abs(metrics.tool_parse_success_rate - 0.667) < 0.01
+
+
 def test_format_metrics_summary_includes_tool_instruction_following():
     """Test format_metrics_summary includes tool call instruction following section."""
     metrics = eval_metrics.EvalMetrics(

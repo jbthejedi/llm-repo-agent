@@ -81,7 +81,7 @@ class EvalConfig:
         llm_provider: Provider backend ("openai" or "together").
         together_api_key: Optional Together API key override.
         tool_protocol: Tool calling protocol ("native" or "json").
-        progress: Whether to show progress output.
+        print_mode: Output verbosity ("quiet", "standard", "verbose").
     """
 
   trace_dir: Path = field(default_factory=lambda: Path("runs/eval"))
@@ -96,7 +96,7 @@ class EvalConfig:
   llm_provider: str = "openai"
   together_api_key: Optional[str] = None
   tool_protocol: str = "native"
-  progress: bool = True
+  print_mode: str = "verbose"
 
 
 class EvalRunner:
@@ -153,7 +153,7 @@ class EvalRunner:
       trace_path = self.cfg.trace_dir / f"{task.task_id}_{run_id}.jsonl"
       llm = self.llm_factory()
       model_name = getattr(llm, "model", None) or (self.cfg.model or "unknown")
-      if self.cfg.progress:
+      if self.cfg.print_mode == "verbose":
         print(f"[llm] provider={self.cfg.llm_provider} model={model_name}")
       trace = Trace(
           trace_path,
@@ -172,7 +172,7 @@ class EvalRunner:
       agent_cfg = AgentConfig(
           max_iters=self.cfg.max_iters,
           test_policy=self.cfg.test_policy,
-          progress=self.cfg.progress,
+          progress=(self.cfg.print_mode == "verbose"),
       )
       agent = RepoAgent(llm=llm, tools=tools, trace=trace, cfg=agent_cfg)
 
@@ -262,7 +262,7 @@ class EvalRunner:
     self.results = []
 
     for task in suite.tasks:
-      if self.cfg.progress:
+      if self.cfg.print_mode == "verbose":
         print(f"\n{'='*60}")
         print(f"[eval] Running task: {task.task_id}")
         print(f"[eval] Goal: {task.goal}")
@@ -270,7 +270,7 @@ class EvalRunner:
 
       task_result = self.run_task(task)
 
-      if self.cfg.progress:
+      if self.cfg.print_mode == "verbose":
         status = "PASS" if task_result.success else ("FAIL" if task_result.success is False else "N/A")
         print(f"\n[eval] Task {task.task_id}: {status}")
         print(f"[eval] Steps: {task_result.steps}, Tool calls: {task_result.tool_calls}")
@@ -285,7 +285,7 @@ class EvalRunner:
     self.results = []
     results_by_idx: Dict[int, TaskResult] = {}
 
-    if self.cfg.progress:
+    if self.cfg.print_mode == "verbose":
       print(f"[eval] Running in parallel with {max_workers} workers")
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -301,7 +301,7 @@ class EvalRunner:
           # Should be rare because run_task catches most errors.
           result = TaskResult(task_id=suite.tasks[idx].task_id, run_id="unknown", success=False, error=str(exc))
         results_by_idx[idx] = result
-        if self.cfg.progress:
+        if self.cfg.print_mode == "verbose":
           status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
           print(f"\n[eval] Task {result.task_id}: {status}")
           print(f"[eval] Steps: {result.steps}, Tool calls: {result.tool_calls}")
@@ -340,6 +340,30 @@ class EvalRunner:
     finally:
       self.llm_factory = original_factory
 
+  def _format_failure_reason(self, result: TaskResult) -> str:
+    """Format failure reason for standard output (similar to prefs command)."""
+    status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+    if status == "PASS":
+      return ""
+
+    if result.error:
+      err_lower = result.error.lower()
+      if "rate" in err_lower or "limit" in err_lower or "429" in err_lower:
+        return " rate_limit"
+      elif "parse" in err_lower or "json" in err_lower:
+        return " json_parse_error"
+      else:
+        return f" error:{result.error[:40]}"
+    elif result.steps >= self.cfg.max_iters:
+      return " max_iters_reached"
+    elif result.parse_errors > 0:
+      return f" parse_errors:{result.parse_errors}"
+    elif status == "FAIL" and result.test_output:
+      first_line = result.test_output.strip().split('\n')[0][:40]
+      return f" test_fail:{first_line}"
+
+    return ""
+
   def run_suite_with_rollouts(
       self,
       suite: EvalSuite,
@@ -359,6 +383,7 @@ class EvalRunner:
     from collections import defaultdict
 
     task_results: Dict[str, List[TaskResult]] = defaultdict(list)
+    print_mode = self.cfg.print_mode
 
     # Generate work items: (task, seed) pairs
     work_items = []
@@ -367,7 +392,7 @@ class EvalRunner:
         seed = (self.cfg.base_seed or 0) + task_idx * rollouts + rollout_idx
         work_items.append((task, seed, rollout_idx))
 
-    if self.cfg.progress:
+    if print_mode != "quiet":
       total = len(suite.tasks) * rollouts
       print(f"[eval] Running {len(suite.tasks)} tasks x {rollouts} rollouts = {total} total runs")
 
@@ -376,11 +401,11 @@ class EvalRunner:
       completed = 0
       with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(self.run_task_with_seed, task, seed): (task, rollout_idx)
+            executor.submit(self.run_task_with_seed, task, seed): (task, seed, rollout_idx)
             for task, seed, rollout_idx in work_items
         }
         for future in as_completed(futures):
-          task, rollout_idx = futures[future]
+          task, seed, rollout_idx = futures[future]
           try:
             result = future.result()
           except Exception as exc:
@@ -393,19 +418,30 @@ class EvalRunner:
             )
           task_results[task.task_id].append(result)
           completed += 1
-          if self.cfg.progress:
+
+          if print_mode == "verbose":
             status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
             print(f"[eval] [{completed}/{len(work_items)}] {task.task_id} rollout {rollout_idx+1}: {status}")
+          elif print_mode == "standard":
+            status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+            reason = self._format_failure_reason(result)
+            print(f"[eval] [{completed}/{len(work_items)}] {task.task_id} seed={seed}: {status}{reason} (steps={result.steps})")
     else:
       # Sequential execution
       for i, (task, seed, rollout_idx) in enumerate(work_items):
-        if self.cfg.progress:
+        if print_mode == "verbose":
           print(f"\n[eval] [{i+1}/{len(work_items)}] Task: {task.task_id}, rollout {rollout_idx+1}")
+
         result = self.run_task_with_seed(task, seed)
         task_results[task.task_id].append(result)
-        if self.cfg.progress:
+
+        if print_mode == "verbose":
           status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
           print(f"[eval] Result: {status}, Steps: {result.steps}, Duration: {result.duration_s:.1f}s")
+        elif print_mode == "standard":
+          status = "PASS" if result.success else ("FAIL" if result.success is False else "N/A")
+          reason = self._format_failure_reason(result)
+          print(f"[eval] [{i+1}/{len(work_items)}] {task.task_id} seed={seed}: {status}{reason} (steps={result.steps})")
 
     # Build flat results list for backward compatibility
     self.results = []

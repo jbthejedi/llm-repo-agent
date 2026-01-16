@@ -58,7 +58,7 @@ def test_eval_runner_integration(tmp_path):
         trace_dir=tmp_path / "traces",
         sandbox=False,
         test_policy="never",
-        progress=False,
+        print_mode="quiet",
     )
     runner = EvalRunner(cfg=cfg, llm_factory=lambda: SeededDummyLLM(seed=1))
     result = runner.run_task(task)

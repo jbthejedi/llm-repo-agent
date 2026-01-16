@@ -83,6 +83,11 @@ def cmd_eval(args):
   base_seed = getattr(args, "seed", None)
   num_workers = getattr(args, "num_workers", 0) or 0
 
+  # Determine print mode (--quiet is shortcut for --print-mode quiet)
+  print_mode = getattr(args, "print_mode", "verbose")
+  if getattr(args, "quiet", False):
+    print_mode = "quiet"
+
   cfg = eval_runner.EvalConfig(
       trace_dir=Path(args.trace_dir),
       sandbox=args.sandbox,
@@ -96,7 +101,7 @@ def cmd_eval(args):
       llm_provider=args.llm_provider,
       together_api_key=args.together_api_key,
       tool_protocol=args.tool_protocol,
-      progress=not args.quiet,
+      print_mode=print_mode,
   )
 
   runner = eval_runner.EvalRunner(cfg=cfg)
@@ -339,7 +344,14 @@ def main():
       help="Number of parallel worker threads for eval (0/1 = sequential).",
   )
   eval_parser.add_argument("--together-api-key", type=str, default=None, help="Together API key override.")
-  eval_parser.add_argument("--quiet", "-q", action="store_true", help="Suppress per-task progress output")
+  eval_parser.add_argument(
+      "--print-mode",
+      type=str,
+      choices=["quiet", "standard", "verbose"],
+      default="verbose",
+      help="Output verbosity: quiet (no output), standard (one line per task like prefs), verbose (detailed logs, default).",
+  )
+  eval_parser.add_argument("--quiet", "-q", action="store_true", help="Shortcut for --print-mode quiet")
   eval_parser.set_defaults(func=cmd_eval)
 
   # -------------------------------------------------------------------------

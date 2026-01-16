@@ -8,6 +8,21 @@ from typing import Any, Dict, List, Optional
 from .runner import TaskResult
 
 
+# Keywords that indicate a parse/JSON error in exception messages
+_PARSE_ERROR_KEYWORDS = [
+    "parse", "json", "valid type", "malformed", "decode", "unexpected token",
+    "expecting", "unterminated", "invalid syntax", "failed to produce",
+]
+
+
+def _is_parse_error(error_msg: str) -> bool:
+  """Check if an error message indicates a JSON/parse error."""
+  if not error_msg:
+    return False
+  error_lower = error_msg.lower()
+  return any(kw in error_lower for kw in _PARSE_ERROR_KEYWORDS)
+
+
 @dataclass
 class EvalMetrics:
   """Aggregate metrics from an evaluation run.
@@ -113,6 +128,10 @@ def compute_metrics(results: List[TaskResult]) -> EvalMetrics:
     total_test_runs += r.test_runs
     total_valid_tool_actions += getattr(r, 'valid_tool_actions', 0)
 
+    # Count errors that look like parse errors (LLM returned invalid JSON)
+    if r.error and _is_parse_error(r.error):
+      total_parse_errors += 1
+
     # Group by category
     category = r.metadata.get("category", "uncategorized")
     if category not in by_category:
@@ -182,6 +201,10 @@ def _compute_flat_metrics(results: List[TaskResult]) -> EvalMetrics:
     total_parse_errors += r.parse_errors
     total_test_runs += r.test_runs
     total_valid_tool_actions += getattr(r, 'valid_tool_actions', 0)
+
+    # Count errors that look like parse errors (LLM returned invalid JSON)
+    if r.error and _is_parse_error(r.error):
+      total_parse_errors += 1
 
   n = len(results)
   metrics.avg_steps = total_steps / n

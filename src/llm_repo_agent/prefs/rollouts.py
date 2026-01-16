@@ -109,7 +109,7 @@ def run_single_rollout(item: RolloutWorkItem, cfg: PrefsConfig) -> RolloutResult
         llm_provider=cfg.llm_provider,
         together_api_key=cfg.together_api_key,
         tool_protocol=cfg.tool_protocol,
-        progress=False,  # Disable per-step progress in parallel mode
+        print_mode="quiet",  # Disable per-step progress in parallel mode
     )
 
     # Create LLM factory with seed
@@ -240,7 +240,7 @@ class PrefsRunner:
                 model=self.cfg.model,
                 llm_provider=self.cfg.llm_provider,
                 together_api_key=self.cfg.together_api_key,
-                progress=self.cfg.progress,
+                print_mode="verbose" if self.cfg.progress else "quiet",
             )
 
             # Create runner with seed-specific LLM factory
