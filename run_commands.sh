@@ -24,6 +24,17 @@ poetry run repo-agent eval \
     --num-workers 5 \
     --print-mode standard
 
+poetry run repo-agent eval \
+    --suite eval/suites/my_suite.json \
+    --trace-dir runs/qwen25_72b_it \
+    --report runs/qwen25_72b_it/report.json \
+    --llm-provider together \
+    --model Qwen/Qwen2.5-72B-Instruct-Turbo \
+    --tool-protocol json \
+    --rollouts 5 \
+    --num-workers 5 \
+    --print-mode standard
+
 # justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84
 poetry run repo-agent eval \
     --suite eval/suites/my_suite.json \
@@ -32,7 +43,9 @@ poetry run repo-agent eval \
     --llm-provider together \
     --model justinbarrye_c241/Qwen2.5-7B-Instruct-qwen25-7b-instruct-sft-pilot-0078c2e9-7ed87e84 \
     --tool-protocol json \
-    --rollouts 5
+    --rollouts 5 \
+    --num-workers 5 \
+    --print-mode standard
 
 #########################
 ###### GEN DPO DATA ######
@@ -231,18 +244,18 @@ poetry run repo-agent prefs \
 ##############################
 poetry run python sft_finetune_quick.py \
   --dataset runs/quixbugs_traces_teacher_qwen25_72b/quixbugs_tool_sft_train.jsonl \
-  --model Qwen/Qwen2.5-7B \
-  --suffix qwen25-7b-sft-pilot-2 \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --suffix qwen25-7b-sft-pilot-toif \
   --epochs 3 \
   --batch-size 8 \
   --warmup-ratio 0.05 \
   --max-grad-norm 1.0 \
-  --train-on-inputs auto \
+  --train-on-inputs False \
   --learning-rate 5e-6 \
   --lora \
   --watch \
   --wandb-project-name repo-agent-finetunes \
-  --wandb-name qwen25-7b-sft-json-tools-2
+  --wandb-name qwen25-7b-sft-json-tools-toif
 
 ##############################
 #### TOGETHER DEPLOY ENDPOINT
