@@ -20,7 +20,11 @@
     - cost estimation
 
 
-## New Together LLM Adapter
+## New LLM Adapters: ChatCompletions +  + Together
+- Moved from ResponseAPI to Chat Completions
+    - Removed history table: history now kept in user/assistant baked in in-chat history
+- Json Tool Calling
+    - tool-protocol=json now returns tool calls as json in the response instead of using native function calling. This is so we could do sft finetuning as Together's finetune jobs require the json to be explicit in the samples
 
 
 ## Prompt + Driver Hardening
