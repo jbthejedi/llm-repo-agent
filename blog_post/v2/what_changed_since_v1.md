@@ -11,6 +11,13 @@
   * V1’s provider wiring made it harder to standardize message formatting, tool-call handling, and multi-turn behavior across models.
   * Moving to a single “Chat Completions” abstraction makes the rest of the agent loop (tools, reflection, parsing, tracing) more uniform.
 
+<figure id="fig-main-execution">
+  <img src="../diagrams/main_execution.png" alt="Diagram of the workflow executed by the driver."/>
+  <figcaption>
+    Fig 1: A diagram of the main execution. 
+  </figcaption>
+</figure>
+
 #### 2) Tool protocol refactor: native tool calling → JSON tool calling
 
 * **What changed**
@@ -21,6 +28,13 @@
 
   * Fine-tuning workflows (Together SFT/DPO) require training samples where the tool call is explicit in the assistant output—JSON is the cleanest portable representation.
   * JSON tool calls also make parsing, dataset creation, and debugging easier because the tool invocation is visible and auditable.
+
+<figure id="fig-agent-workflow-v2">
+  <img src="../diagrams/agent_workflow_v2.png" alt="Diagram of the workflow executed by the driver."/>
+  <figcaption>
+    Fig 1: A diagram of version 2 the workflow executed by the driver (RepoAgent.run)
+  </figcaption>
+</figure>
 
 #### 3) Response API → Chat Completions multiturn (and removing the history table)
 
@@ -69,6 +83,13 @@
 * **Why it changed**
 
   * Significantly improves throughput and lets you run Monte Carlo-style evaluation and dataset generation in reasonable wall-clock time.
+
+<figure id="fig-multithreaded-eval-suite">
+  <img src="../diagrams/multithreaded_eval_suite.png" alt="Diagram of the workflow executed by the driver."/>
+  <figcaption>
+    Fig 1: A diagram of the how multithreading is used to execute the evaluation suite.
+  </figcaption>
+</figure>
 
 #### 7) Evaluation harness upgrade: multiple rollouts per task
 

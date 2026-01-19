@@ -24,7 +24,7 @@
 ---
 
 <figure id="fig-agent-workflow">
-  <img src="./diagrams/agent_workflow.png" alt="Diagram of the workflow executed by the driver."/>
+  <img src="../diagrams/agent_workflow.png" alt="Diagram of the workflow executed by the driver."/>
   <figcaption>
     Fig 1: A diagram of the workflow executed by the driver (RepoAgent.run)
   </figcaption>
