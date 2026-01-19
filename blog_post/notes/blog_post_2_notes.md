@@ -1,0 +1,12 @@
+What changed since v0?
+- Response API -> Chat Completions Multiturn
+    - removed history
+- sandbox added
+- multithreading added
+- multiple rollouts per task during evaluation
+- SFT
+    - generation of data
+    - finetune calling
+- DPO (probably honorable mention)
+    - generation of data
+    - dpo finetune calling
