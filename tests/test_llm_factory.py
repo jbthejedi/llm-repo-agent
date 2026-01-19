@@ -1,12 +1,12 @@
 import pytest
 
-from llm_repo_agent.llm import LLMFactory, LLMConfig, ChatCompletionsLLM, JsonToolLLM
+from llm_repo_agent.llm import LLMFactory, LLMConfig, NativeToolCallChatCompletionsLLM, JsonToolChatCompletionsLLM
 
 
 def test_factory_builds_openai():
     cfg = LLMConfig(provider="openai", model="gpt-4.1-mini")
     llm = LLMFactory.build(cfg)
-    assert isinstance(llm, ChatCompletionsLLM)
+    assert isinstance(llm, NativeToolCallChatCompletionsLLM)
     assert llm.model == "gpt-4.1-mini"
     assert llm.base_url is None
 
@@ -14,7 +14,7 @@ def test_factory_builds_openai():
 def test_factory_builds_together():
     cfg = LLMConfig(provider="together", model="mistralai/Mistral-7B-Instruct-v0.3")
     llm = LLMFactory.build(cfg)
-    assert isinstance(llm, ChatCompletionsLLM)
+    assert isinstance(llm, NativeToolCallChatCompletionsLLM)
     assert llm.model == "mistralai/Mistral-7B-Instruct-v0.3"
     assert llm.base_url == "https://api.together.xyz/v1"
 
@@ -22,7 +22,7 @@ def test_factory_builds_together():
 def test_factory_builds_json_tool_llm():
     cfg = LLMConfig(provider="openai", model="gpt-4.1-mini", tool_protocol="json")
     llm = LLMFactory.build(cfg)
-    assert isinstance(llm, JsonToolLLM)
+    assert isinstance(llm, JsonToolChatCompletionsLLM)
     assert llm.tool_protocol == "json"
 
 

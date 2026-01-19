@@ -1,7 +1,7 @@
 import copy
 from types import SimpleNamespace
 
-from llm_repo_agent.llm import ChatCompletionsLLM
+from llm_repo_agent.llm import NativeToolCallChatCompletionsLLM
 from llm_repo_agent.actions import ToolCallAction, FinalAction
 
 
@@ -39,7 +39,7 @@ def test_driver_note_appended_after_tool_result():
         ))]),
     ]
 
-    llm = ChatCompletionsLLM(model="gpt-4.1-mini")
+    llm = NativeToolCallChatCompletionsLLM(model="gpt-4.1-mini")
     llm.client = DummyClient(responses, recorded)
     llm.start_conversation("sys", "goal")
 

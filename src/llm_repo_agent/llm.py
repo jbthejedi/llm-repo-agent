@@ -45,7 +45,7 @@ class LLM(Protocol):
 
 
 @dataclass
-class ChatCompletionsLLM:
+class NativeToolCallChatCompletionsLLM:
   """
   Chat Completions adaptor with proper multi-turn function calling.
   Works with OpenAI, Together, and other OpenAI-compatible providers.
@@ -330,7 +330,7 @@ class ChatCompletionsLLM:
 
 
 @dataclass
-class JsonToolLLM:
+class JsonToolChatCompletionsLLM:
   """
   Chat Completions adaptor that uses JSON-in-content tool calls (no native tool calling).
 
@@ -530,7 +530,7 @@ class LLMFactory:
 
 def _build_openai(cfg: LLMConfig) -> LLM:
   model = cfg.model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-  cls = JsonToolLLM if cfg.tool_protocol == "json" else ChatCompletionsLLM
+  cls = JsonToolChatCompletionsLLM if cfg.tool_protocol == "json" else NativeToolCallChatCompletionsLLM
   return cls(
       model=model,
       temperature=cfg.temperature,
@@ -545,7 +545,7 @@ def _build_openai(cfg: LLMConfig) -> LLM:
 def _build_together(cfg: LLMConfig) -> LLM:
   model = cfg.model or os.getenv("TOGETHER_MODEL", "Qwen/Qwen2.5-7B-Instruct-Turbo")
   base_url = cfg.together_base_url or os.getenv("TOGETHER_BASE_URL", "https://api.together.xyz/v1")
-  cls = JsonToolLLM if cfg.tool_protocol == "json" else ChatCompletionsLLM
+  cls = JsonToolChatCompletionsLLM if cfg.tool_protocol == "json" else NativeToolCallChatCompletionsLLM
   return cls(
       model=model,
       temperature=cfg.temperature,

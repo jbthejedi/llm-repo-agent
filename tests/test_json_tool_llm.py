@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from llm_repo_agent.actions import ToolCallAction, FinalAction, ActionParseError
-from llm_repo_agent.llm import JsonToolLLM
+from llm_repo_agent.llm import JsonToolChatCompletionsLLM
 
 
 class DummyClient:
@@ -32,7 +32,7 @@ def test_json_tool_llm_parses_tool_calls_and_appends_tool_result():
         ))]),
     ]
 
-    llm = JsonToolLLM(model="gpt-4.1-mini")
+    llm = JsonToolChatCompletionsLLM(model="gpt-4.1-mini")
     llm.client = DummyClient(responses, recorded)
     llm.start_conversation("sys", "GOAL:\nFix it")
 
@@ -52,7 +52,7 @@ def test_json_tool_llm_logs_invalid_json():
         SimpleNamespace(choices=[SimpleNamespace(message=_message("not-json"))]),
     ]
 
-    llm = JsonToolLLM(model="gpt-4.1-mini")
+    llm = JsonToolChatCompletionsLLM(model="gpt-4.1-mini")
     llm.client = DummyClient(responses, recorded)
     llm.start_conversation("sys", "GOAL:\nFix it")
 
