@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="f952tgsUvYaaC3J5rJmN" name="Page-1">
-        <mxGraphModel dx="788" dy="2163" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="788" dy="1678" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -27,7 +27,7 @@
                     <mxGeometry x="300" y="940" width="40" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="50" value="&lt;p style=&quot;margin:0px;margin-top:4px;text-align:center;&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;RolloutResults&lt;/font&gt;&lt;/p&gt;&lt;hr style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+ task_results Dict[str, List[TaskResult]]&lt;br&gt;+ rollouts_per_task: int&lt;/font&gt;&lt;/p&gt;&lt;p style=&quot;margin:0px;margin-left:4px;&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+ total_tasks: int&lt;/font&gt;&lt;/p&gt;&lt;hr style=&quot;border-style:solid;&quot;&gt;&lt;p style=&quot;scrollbar-color: rgb(75, 75, 75) rgb(27, 29, 30); margin: 0px 0px 0px 4px; color: rgb(192, 192, 192);&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+ get_task_summary()&lt;/font&gt;&lt;/p&gt;&lt;p style=&quot;scrollbar-color: rgb(75, 75, 75) rgb(27, 29, 30); margin: 0px 0px 0px 4px; color: rgb(192, 192, 192);&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+ get_task_pass_rate()&lt;br style=&quot;scrollbar-color: rgb(75, 75, 75) rgb(27, 29, 30); color: rgb(192, 192, 192);&quot;&gt;&lt;/font&gt;&lt;/p&gt;&lt;p style=&quot;scrollbar-color: rgb(75, 75, 75) rgb(27, 29, 30); margin: 0px 0px 0px 4px; color: rgb(192, 192, 192);&quot;&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;+ all_results()&lt;/font&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=19;fillColor=#d0cee2;strokeColor=#56517e;labelBackgroundColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="662.5" y="290" width="337.5" height="230" as="geometry"/>
+                    <mxGeometry x="662.5" y="290" width="347.5" height="230" as="geometry"/>
                 </mxCell>
                 <mxCell id="67" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="66" target="86" edge="1">
                     <mxGeometry relative="1" as="geometry">
